@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.002.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MyPlanner.API", "MyPlanner.API\MyPlanner.API.csproj", "{7FAA5325-D1AC-47F4-AF16-6658F40A7A22}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MyPlanner.Service.UnitTests", "MyPlanner.UnitTests\MyPlanner.Service.UnitTests.csproj", "{59722D48-5D07-437E-A302-3F3E683C603D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyPlanner.API.Contracts", "MyPlanner.API.Contracts\MyPlanner.API.Contracts.csproj", "{46589C2C-E6EE-4D12-810D-E01E6EFE8AFD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Requests", "Requests", "{B3890FA9-D0FA-4013-8458-3B610227FA0F}"
+	ProjectSection(SolutionItems) = preProject
+		UpdateBreakfast.http = UpdateBreakfast.http
+		CreateBreakfast.http = CreateBreakfast.http
+		GetFolders.http = GetFolders.http
+		DeleteFolder.http = DeleteFolder.http
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyPlanner.Data", "MyPlanner.Data\MyPlanner.Data.csproj", "{E1BA2819-82AE-4001-8549-77802891FC0B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyPlanner.Service", "MyPlanner.Service\MyPlanner.Service.csproj", "{D29A9C40-3638-45DB-AC52-5198B88C4501}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7FAA5325-D1AC-47F4-AF16-6658F40A7A22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7FAA5325-D1AC-47F4-AF16-6658F40A7A22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7FAA5325-D1AC-47F4-AF16-6658F40A7A22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7FAA5325-D1AC-47F4-AF16-6658F40A7A22}.Release|Any CPU.Build.0 = Release|Any CPU
+		{59722D48-5D07-437E-A302-3F3E683C603D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59722D48-5D07-437E-A302-3F3E683C603D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59722D48-5D07-437E-A302-3F3E683C603D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59722D48-5D07-437E-A302-3F3E683C603D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46589C2C-E6EE-4D12-810D-E01E6EFE8AFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46589C2C-E6EE-4D12-810D-E01E6EFE8AFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46589C2C-E6EE-4D12-810D-E01E6EFE8AFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46589C2C-E6EE-4D12-810D-E01E6EFE8AFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1BA2819-82AE-4001-8549-77802891FC0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1BA2819-82AE-4001-8549-77802891FC0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1BA2819-82AE-4001-8549-77802891FC0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1BA2819-82AE-4001-8549-77802891FC0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D29A9C40-3638-45DB-AC52-5198B88C4501}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D29A9C40-3638-45DB-AC52-5198B88C4501}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D29A9C40-3638-45DB-AC52-5198B88C4501}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D29A9C40-3638-45DB-AC52-5198B88C4501}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B4777DBF-EE15-4BE4-8E99-0BEECFA5B84E}
+	EndGlobalSection
+EndGlobal
