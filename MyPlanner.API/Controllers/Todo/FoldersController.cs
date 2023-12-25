@@ -9,9 +9,11 @@ namespace MyPlanner.API;
 public class FoldersController : ControllerBase
 {
     private readonly ITodoFolderService _folderService;
-    public FoldersController(ITodoFolderService folderService)
+    private readonly ITodoListService _listService;
+    public FoldersController(ITodoFolderService folderService, ITodoListService listService)
     {
         _folderService = folderService;
+        _listService = listService;
     }
 
     [HttpPost]
@@ -34,6 +36,14 @@ public class FoldersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetFolder(Guid id){
         var folder = await _folderService.GetAsync(id);
+        if(folder != null)
+            return Ok(folder);
+        return NotFound();
+    }
+
+    [HttpGet("{id}/lists")]
+    public async Task<IActionResult> GetListsByFolderId(Guid id){
+        var folder = await _listService.GetAllAsync(id);
         if(folder != null)
             return Ok(folder);
         return NotFound();

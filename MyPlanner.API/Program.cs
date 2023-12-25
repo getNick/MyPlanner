@@ -42,4 +42,6 @@ void ConfigureServices(IServiceCollection services){
 
     services.AddScoped<IUnitOfWork, UnitOfWork>();
     services.AddTransient<ITodoFolderService, TodoFolderService>();
+    services.AddTransient<ITodoListService, TodoListService>();
+    services.AddTransient<ITodoTaskService, TodoTaskService>();
 }
