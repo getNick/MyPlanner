@@ -35,7 +35,7 @@ public class ListsController : ControllerBase
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetList(Guid id){
-        var folder = await _listService.GetAsync(id);
+        var folder = await _listService.GetIncludeTasksAsync(id);
         if(folder != null)
             return Ok(folder);
         return NotFound();
