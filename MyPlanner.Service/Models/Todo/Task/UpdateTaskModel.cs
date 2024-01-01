@@ -2,9 +2,9 @@
 
 public class UpdateTaskModel
 {
-    public Guid Id{get;}
-    public string? Title{get;}
-    public string? Description{get;}
+    public Guid Id{get;set;}
+    public string? Title{get;set;}
+    public string? Description{get;set;}
     public bool? IsComplete{get;set;}
-    public Guid? ListId{get;}
+    public Guid? ListId{get;set;}
 }
