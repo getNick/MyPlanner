@@ -83,7 +83,7 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
         return (
           <li key={task.id} onClick={(e) => this.onTaskSelection(e,task)} className={`item ${styleName} pl-3 pr-1 justify-between`}>
             <div className='ml-2'>
-              <input type="checkbox" checked={task.isComplete} onClick={() => this.onToggleIsComplete(task)} className="w-4 h-4 rounded"/>
+              <input type="checkbox" checked={task.isComplete} onChange={() => this.onToggleIsComplete(task)} className="w-4 h-4 rounded"/>
               <span className="ml-1">{task.title}</span>
             </div>
             {this.getTaskOptions(task)}
