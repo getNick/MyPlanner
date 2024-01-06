@@ -1,0 +1,4 @@
+/* Disable the default focus outline in Chrome */
+input:focus, textarea:focus, button:focus {
+    outline: none;
+}

@@ -40,11 +40,11 @@ export default class TodoTaskView extends React.Component<TodoTaskViewProps,Todo
 
         return (
             <div className="flex flex-col h-full w-full">
-                <TextInput styleName="w-full h-10 p-1 font-bold text-xl border-0"
+                <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
                             onSubmit={this.onTitleChanged} 
                             placeholderText="Title"
                             value={this.props.task.title}/>
-                <TextInput styleName="w-full flex-auto p-1 border-0"
+                <TextInput styleName="w-full flex-auto p-1"
                             onSubmit={this.onDescriptionChanged} 
                             placeholderText="Description"
                             useTextArea={true}
