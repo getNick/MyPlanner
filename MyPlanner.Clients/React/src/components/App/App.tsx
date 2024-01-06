@@ -98,7 +98,11 @@ export default class App extends React.Component<{},AppState>{
   }
 
   onUpdateList = async (list: UpdateList) =>{
-    const listId = await this.todoService.updateList(list);
+    const isUpdated = await this.todoService.updateList(list);
+    if(isUpdated === false)
+      return;
+
+    const listId: string = list.id;
     const selectedListId: string | undefined = this.state.selectedFolderOrList instanceof TodoList
       ? this.state.selectedFolderOrList.id
       : undefined;
@@ -134,7 +138,10 @@ export default class App extends React.Component<{},AppState>{
   }
 
   onUpdateTask = async (task: UpdateTask) =>{
-    const taskId = await this.todoService.updateTask(task);
+    const isUpdated = await this.todoService.updateTask(task);
+    if(isUpdated === false)
+      return;
+
     const selectedListId: string | undefined = this.state.selectedFolderOrList instanceof TodoList
       ? this.state.selectedFolderOrList.id
       : undefined;

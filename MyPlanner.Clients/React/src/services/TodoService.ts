@@ -63,12 +63,12 @@ export default class TodoService{
       return res;
     }
 
-    public async updateTask(updateTask: UpdateTask): Promise<string>{
+    public async updateTask(updateTask: UpdateTask): Promise<boolean>{
       const res = await this.sendPutRequest("tasks", updateTask);
       return res;
     }
 
-    public async updateList(updateList: UpdateList): Promise<string>{
+    public async updateList(updateList: UpdateList): Promise<boolean>{
       const res = await this.sendPutRequest("lists", updateList);
       return res;
     }
@@ -138,7 +138,7 @@ export default class TodoService{
       return true;
     }
 
-    private async sendPutRequest(url:string, object: any) : Promise<any>{
+    private async sendPutRequest(url:string, object: any) : Promise<boolean>{
       try {
         const request: string = `${this._baseUrl}${url}`;
         const response = await fetch(request, {
@@ -150,11 +150,10 @@ export default class TodoService{
         if (!response.ok) {
           throw new Error(`Failed post request ${url}: ${response.status} ${response.statusText}`);
         }
-    
-        return await response.json();
       } catch (error) {
         if (error instanceof Error)
           console.error(`Error: ${error.message}`);
       }
+      return true;
     }
 }
