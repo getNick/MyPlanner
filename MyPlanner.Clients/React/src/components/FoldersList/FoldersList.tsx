@@ -12,12 +12,10 @@ interface FoldersListProps {
     selectedItemId: string | undefined,
     folders: TodoFolder[] | undefined,
     listsWithoutFolder: TodoList[] | undefined,
-    onFolderSelection: (id: string) => void,
-    onListSelection: (id: string) => void,
+    onSelection: (item: TodoFolder | TodoList) => void,
+    onDelete: (item: TodoFolder | TodoList) => void,
     onAddList: (title: string, folderId: string|null) => void,
     onAddFolder: (title: string) => void,
-    onDeleteFolder: (id: string) => void,
-    onDeleteList: (id: string) => void,
   }
 
   interface FoldersListState{
@@ -40,19 +38,14 @@ interface FoldersListProps {
       })
     }
 
-    onListSelection = (e: React.MouseEvent<HTMLElement>, list: TodoList)=>{
+    onSelection = (e: React.MouseEvent<HTMLElement>, item: TodoFolder | TodoList)=>{
       e.stopPropagation();
-      this.props.onListSelection(list.id)
+      this.props.onSelection(item)
     }
 
-    onDeleteFolder = (e: React.MouseEvent<HTMLElement>, folder: TodoFolder)=>{
+    onDelete = (e: React.MouseEvent<HTMLElement>, item: TodoFolder | TodoList)=>{
       e.stopPropagation();
-      this.props.onDeleteFolder(folder.id);
-    }
-
-    onDeleteList = (e: React.MouseEvent<HTMLElement>, list: TodoList)=>{
-      e.stopPropagation();
-      this.props.onDeleteList(list.id);
+      this.props.onDelete(item);
     }
 
     toggleIsFolderOpen = (folder: TodoFolder) => {
@@ -73,14 +66,15 @@ interface FoldersListProps {
       const folders = this.props.folders;
       if(folders === undefined){
         return (
-            <div className="flex flex-col h-full w-60 flex-auto m-0 bg-slate-200 shadow-lg p-1">
+            <div className="flex flex-col h-full flex-auto m-0 p-1">
             <h3>Loading...</h3>
           </div>)
       }
   
       const foldersView = folders.map((folder) => this.getFolderView(folder));
+      const listsWithoutFolder = this.props.listsWithoutFolder?.map((list) => this.getListView(list))
       return (
-      <div className="flex flex-col h-full w-60 flex-auto m-0 bg-slate-200 shadow-lg p-1">
+      <div className="flex flex-col h-full flex-auto m-0 p-1">
         <div className="flex justify-between p-1">
             <span>Lists</span>
             <button className="h-5 w-5 bg-slate-300 text-zinc-700 rounded" onClick={()=> this.setIsAddListModalOpen(true)}>
@@ -95,6 +89,7 @@ interface FoldersListProps {
 
         <ul>
           {foldersView}
+          {listsWithoutFolder}
         </ul>
       </div>)
     }
@@ -108,7 +103,7 @@ interface FoldersListProps {
           {folder.lists.map((list) => this.getListView(list))}
         </ul> )
       return (
-        <li key={folder.id} onClick={() => this.props.onFolderSelection(folder.id)}>
+        <li key={folder.id} onClick={(e) => this.onSelection(e, folder)}>
           <div className='flex flex-col w-full'>
             <div className={`item ${styleName} flex w-full justify-between`}>
               <div>
@@ -128,7 +123,7 @@ interface FoldersListProps {
       const isSelected: Boolean = list.id === this.props.selectedItemId;
       const styleName: string = isSelected ? " item-selected" : "";
       return (
-        <li key={list.id} onClick={(e) => this.onListSelection(e,list)} className={`item ${styleName} pl-3 pr-1 justify-between`}>
+        <li key={list.id} onClick={(e) => this.onSelection(e,list)} className={`item ${styleName} pl-3 pr-1 justify-between`}>
           <div className='ml-2'>
             <FontAwesomeIcon icon={faBars}/>
             <span className="ml-1">{list.title}</span>
@@ -147,7 +142,7 @@ interface FoldersListProps {
           <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
-                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDeleteFolder(e, folder)}>
+                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, folder)}>
                   <span className='px-2'>Delete</span>
                 </button>
               )}
@@ -166,7 +161,7 @@ interface FoldersListProps {
           <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
-                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDeleteList(e, list)}>
+                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, list)}>
                   <span className='px-2'>Delete</span>
                 </button>
               )}
