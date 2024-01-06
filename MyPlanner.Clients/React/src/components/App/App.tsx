@@ -8,6 +8,7 @@ import TodoListView from '../TodoListView/TodoListView';
 import TodoTask from '../../entities/TodoTask';
 import UpdateTask from '../../entities/UpdateTask';
 import TodoTaskView from '../TodoTaskView/TodoTaskView';
+import UpdateList from '../../entities/UpdateList';
 
 interface AppState{
   folders: TodoFolder[] | undefined,
@@ -96,6 +97,23 @@ export default class App extends React.Component<{},AppState>{
     }
   }
 
+  onUpdateList = async (list: UpdateList) =>{
+    const listId = await this.todoService.updateList(list);
+    const selectedListId: string | undefined = this.state.selectedFolderOrList instanceof TodoList
+      ? this.state.selectedFolderOrList.id
+      : undefined;
+    if(selectedListId === listId){
+      const selectedList = await this.todoService.getList(listId);
+      this.setState({
+        selectedFolderOrList : selectedList,
+      })
+    }
+    const items = await this.todoService.getFolders();
+    this.setState({
+        folders : items,
+    })
+  }
+
   onAddTask = async (title: string, listId: string) =>{
     const taskId = await this.todoService.createTask(title, listId);
     const selectedList = await this.todoService.getList(listId);
@@ -133,6 +151,7 @@ export default class App extends React.Component<{},AppState>{
     const listView = this.state.selectedFolderOrList instanceof TodoList 
     ? (<TodoListView list={this.state.selectedFolderOrList} 
                       selectedTaskId={this.state.selectedTask?.id}
+                      onUpdateList={this.onUpdateList}
                       onSelectTask={this.onSelectTask}
                       onAddTask={this.onAddTask} 
                       onDeleteTask={this.onDeleteTask} 

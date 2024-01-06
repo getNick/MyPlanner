@@ -7,10 +7,12 @@ import TodoTask from "../../entities/TodoTask";
 import TextInput from "../TextInput/TextInput";
 import { Menu } from "@headlessui/react";
 import UpdateTask from "../../entities/UpdateTask";
+import UpdateList from "../../entities/UpdateList";
 
 interface TodoListViewProps{
     list: TodoList,
     selectedTaskId: string | undefined,
+    onUpdateList: (list: UpdateList) => void,
     onAddTask: (title: string, listId: string) => void,
     onDeleteTask: (task: TodoTask) => void,
     onUpdateTask: (task: UpdateTask) => void,
@@ -26,6 +28,12 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
     onNewTaskSubmit = (newTaskTitle: string) =>{
       this.props.onAddTask(newTaskTitle, this.props.list.id);
     }
+
+    onTitleChanged = (newTitle: string) => {
+      let changeTitleChange: UpdateList = new UpdateList(this.props.list.id);
+      changeTitleChange.title = newTitle;
+      this.props.onUpdateList(changeTitleChange)
+    }
    
     render(): React.ReactNode {
         const tasksView : React.ReactNode = this.props.list.tasks.map((folder) => this.getTaskView(folder));
@@ -34,7 +42,10 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
         return(
             <div className="m-1">
               <div className="flex m-1 items-center">
-                  <h2 className="ml-1 font-bold text-xl">{listTitle}</h2>
+                <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
+                            onSubmit={this.onTitleChanged} 
+                            placeholderText="Title"
+                            value={listTitle}/>
               </div>
 
               <div className="m-1">

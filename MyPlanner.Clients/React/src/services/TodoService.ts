@@ -1,6 +1,7 @@
 import TodoFolder from "../entities/TodoFolder";
 import TodoList from "../entities/TodoList";
 import TodoTask from "../entities/TodoTask";
+import UpdateList from "../entities/UpdateList";
 import UpdateTask from "../entities/UpdateTask";
 
 export default class TodoService{
@@ -64,6 +65,11 @@ export default class TodoService{
 
     public async updateTask(updateTask: UpdateTask): Promise<string>{
       const res = await this.sendPutRequest("tasks", updateTask);
+      return res;
+    }
+
+    public async updateList(updateList: UpdateList): Promise<string>{
+      const res = await this.sendPutRequest("lists", updateList);
       return res;
     }
 
