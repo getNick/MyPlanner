@@ -21,7 +21,7 @@ const TextInput: React.FC<TextInputProps> = (props)=>{
     [props.value]);
 
     const submitText = () => {
-        if(currentText.length > 0){
+        if(currentText.length > 0 && currentText !== props.value){
             props.onSubmit(currentText);
             if(clearTextOnSubmit){
                 setCurrentText("");
