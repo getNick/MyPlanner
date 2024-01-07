@@ -2,10 +2,13 @@ import React from "react";
 import TodoTask from "../../entities/TodoTask";
 import UpdateTask from "../../entities/UpdateTask";
 import TextInput from "../TextInput/TextInput";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 
 interface TodoTaskViewProps{
     task?: TodoTask | undefined,
     onUpdateTask: (task: UpdateTask) => void,
+    closeTaskBar: () => void,
 }
 
 interface TodoTaskViewState{
@@ -39,16 +42,23 @@ export default class TodoTaskView extends React.Component<TodoTaskViewProps,Todo
         }
 
         return (
-            <div className="flex flex-col h-full w-full">
-                <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
-                            onSubmit={this.onTitleChanged} 
-                            placeholderText="Title"
-                            value={this.props.task.title}/>
+            <div className="flex flex-col h-full w-full m-1">
+                <div className="flex h-10 items-center">
+                    <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={this.props.closeTaskBar}>
+                        <FontAwesomeIcon icon={faChevronLeft} />
+                    </button>
+
+                    <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
+                        onSubmit={this.onTitleChanged}
+                        placeholderText="Title"
+                        value={this.props.task.title} />
+                </div>
+
                 <TextInput styleName="w-full flex-auto p-1"
-                            onSubmit={this.onDescriptionChanged} 
-                            placeholderText="Description"
-                            useTextArea={true}
-                            value={this.props.task.description}/>
+                    onSubmit={this.onDescriptionChanged}
+                    placeholderText="Description"
+                    useTextArea={true}
+                    value={this.props.task.description} />
             </div>
         )
     }

@@ -13,8 +13,10 @@ import UpdateList from '../../entities/UpdateList';
 interface AppState{
   folders: TodoFolder[] | undefined,
   listsWithoutFolder: TodoList[] | undefined,
-  selectedFolderOrList: TodoFolder | TodoList | undefined
-  selectedTask: TodoTask | undefined
+  selectedFolderOrList: TodoFolder | TodoList | undefined,
+  selectedTask: TodoTask | undefined,
+  isSidebarOpen: boolean,
+  isTaskBarOpen: boolean,
 }
 
 export default class App extends React.Component<{},AppState>{
@@ -25,6 +27,8 @@ export default class App extends React.Component<{},AppState>{
       listsWithoutFolder: undefined,
       selectedFolderOrList : undefined,
       selectedTask : undefined,
+      isSidebarOpen : true,
+      isTaskBarOpen : false,
     }
   }
 
@@ -44,6 +48,7 @@ export default class App extends React.Component<{},AppState>{
   }
 
   onFolderOrListSelection = async (item: TodoFolder | TodoList) =>{
+    this.setIsSidebarOpen(false)
     const selectedItem: TodoFolder | TodoList | undefined = item instanceof TodoFolder
       ? await this.todoService.getFolder(item.id)
       : await this.todoService.getList(item.id);
@@ -54,6 +59,7 @@ export default class App extends React.Component<{},AppState>{
   }
 
   onSelectTask = async (task: TodoTask) =>{
+    this.setIsTaskbarOpen(true);
     this.setState({
       selectedTask : task,
     });
@@ -153,11 +159,24 @@ export default class App extends React.Component<{},AppState>{
     }
   }
 
+  setIsSidebarOpen = (isOpen: boolean) => {
+    this.setState({
+      isSidebarOpen: isOpen
+    })
+  }
+
+  setIsTaskbarOpen = (isOpen: boolean) => {
+    this.setState({
+      isTaskBarOpen: isOpen
+    })
+  }
+
   render(): React.ReactNode {
 
     const listView = this.state.selectedFolderOrList instanceof TodoList 
     ? (<TodoListView list={this.state.selectedFolderOrList} 
                       selectedTaskId={this.state.selectedTask?.id}
+                      openSidebar={()=> this.setIsSidebarOpen(true)}
                       onUpdateList={this.onUpdateList}
                       onSelectTask={this.onSelectTask}
                       onAddTask={this.onAddTask} 
@@ -165,9 +184,12 @@ export default class App extends React.Component<{},AppState>{
                       onUpdateTask={this.onUpdateTask}/>) 
     : undefined;
 
+    const folderContainerStyle: string = this.state.isSidebarOpen ? "" : " -translate-x-full";
+    const taskContainerStyle: string = this.state.isTaskBarOpen ? "" : "translate-x-full";
+
     return (
-      <div className="container flex h-screen m-0">
-        <div className='h-full w-60 m-0 bg-slate-200 shadow-lg p-1'>
+      <div className="container grid md:grid-flow-col h-screen m-0">
+        <div className={`fixed top-0 left-0 h-full w-full overflow-auto bg-slate-200 transition-transform transform ${folderContainerStyle} z-10`}>
           <FoldersList folders={this.state.folders} 
                        listsWithoutFolder={this.state.listsWithoutFolder} 
                        selectedItemId={this.state.selectedFolderOrList?.id}
@@ -177,13 +199,14 @@ export default class App extends React.Component<{},AppState>{
                        onDelete={this.onDeleteFolderOrList}/>
         </div>
 
-        <div className='h-full w-[600px] m-0 shadow-lg p-1'>
+        <div className='h-full w-full overflow-auto p-1'>
           {listView}
         </div>
 
-        <div className='h-full flex-auto p-1'>
+        <div className={`fixed top-0 left-0 h-full w-full overflow-auto p-1 transition-transform transform ${taskContainerStyle} bg-white`}>
           <TodoTaskView task={this.state.selectedTask} 
-                      onUpdateTask={this.onUpdateTask}/>
+                        closeTaskBar={()=> this.setIsTaskbarOpen(false)}
+                        onUpdateTask={this.onUpdateTask}/>
         </div>
       </div>
     );

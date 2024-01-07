@@ -48,7 +48,8 @@ interface FoldersListProps {
       this.props.onDelete(item);
     }
 
-    toggleIsFolderOpen = (folder: TodoFolder) => {
+    toggleIsFolderOpen = (e: React.MouseEvent<HTMLElement>, folder: TodoFolder) => {
+      e.stopPropagation();
       this.setState((state:FoldersListState) => {
         const openFoldersIds: string[] =  state.openFoldersIds.includes(folder.id) 
           ? state.openFoldersIds.filter((item) => item !== folder.id) // exclude
@@ -106,8 +107,10 @@ interface FoldersListProps {
         <li key={folder.id} onClick={(e) => this.onSelection(e, folder)}>
           <div className='flex flex-col w-full'>
             <div className={`item ${styleName} flex w-full justify-between`}>
-              <div>
-                <FontAwesomeIcon icon={isOpen ? faAngleDown : faAngleRight} className='px-1' onClick={()=>this.toggleIsFolderOpen(folder)} />
+              <div className='flex items-center'>
+                <button className='h-8 w-8' onClick={(e) => this.toggleIsFolderOpen(e, folder)}>
+                  <FontAwesomeIcon icon={isOpen ? faAngleDown : faAngleRight} />
+                </button>
                 <FontAwesomeIcon icon={isOpen ? faFolderOpen : faFolder} />
                 <span className="ml-1">{folder.title}</span>
               </div>
@@ -139,7 +142,7 @@ interface FoldersListProps {
           <Menu.Button className="h-full w-10 text-zinc-700">
             <FontAwesomeIcon icon={faEllipsis}/>
           </Menu.Button>
-          <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
+          <Menu.Items className="absolute z-20 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
                 <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, folder)}>
@@ -158,7 +161,7 @@ interface FoldersListProps {
           <Menu.Button className="h-full w-10 text-zinc-700">
             <FontAwesomeIcon icon={faEllipsis}/>
           </Menu.Button>
-          <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
+          <Menu.Items className="absolute z-20 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
                 <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, list)}>

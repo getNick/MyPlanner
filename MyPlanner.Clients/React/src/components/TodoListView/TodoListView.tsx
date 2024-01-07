@@ -2,7 +2,7 @@ import React from "react";
 import TodoList from "../../entities/TodoList";
 import './TodoListView.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBars, faEllipsis } from "@fortawesome/free-solid-svg-icons";
+import { faBars, faEllipsis, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import TodoTask from "../../entities/TodoTask";
 import TextInput from "../TextInput/TextInput";
 import { Menu } from "@headlessui/react";
@@ -12,6 +12,7 @@ import UpdateList from "../../entities/UpdateList";
 interface TodoListViewProps{
     list: TodoList,
     selectedTaskId: string | undefined,
+    openSidebar : () => void,
     onUpdateList: (list: UpdateList) => void,
     onAddTask: (title: string, listId: string) => void,
     onDeleteTask: (task: TodoTask) => void,
@@ -34,6 +35,7 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
       changeTitleChange.title = newTitle;
       this.props.onUpdateList(changeTitleChange)
     }
+
    
     render(): React.ReactNode {
         const tasksView : React.ReactNode = this.props.list.tasks.map((folder) => this.getTaskView(folder));
@@ -41,19 +43,21 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
 
         return(
             <div className="m-1">
-              <div className="flex m-1 items-center">
+              <div className="flex h-10 items-center">
+                <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={this.props.openSidebar}>
+                  <FontAwesomeIcon icon={faChevronLeft}/>
+                </button>
+                
                 <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
                             onSubmit={this.onTitleChanged} 
                             placeholderText="Title"
                             value={listTitle}/>
               </div>
 
-              <div className="m-1">
-                <TextInput styleName="w-full h-10 m-1 p-1 rounded bg-gray-100 focus:bg-white focus:border-blue-500 focus:border" 
+              <TextInput styleName="w-full h-10 m-1 p-1 rounded bg-gray-100 focus:bg-white focus:border-blue-500 focus:border" 
                           placeholderText={`Add task to '${listTitle}', press Enter to save`}
                           clearTextOnSubmit={true}
                           onSubmit={this.onNewTaskSubmit}/>
-              </div>
               <ul>
                   {tasksView}
               </ul>
