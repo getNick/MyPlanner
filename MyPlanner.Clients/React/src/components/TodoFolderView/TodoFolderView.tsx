@@ -84,7 +84,7 @@ export default class TodoFolderView extends React.Component<TodoFolderViewProps,
       return (
         <li key={list.id} className={`pl-3 pr-1`}>
           <div>
-            <button className='h-8 w-8' onClick={(e) => this.toggleIsListOpen(e, list)}>
+            <button className='h-8 w-8' onClick={(e) => this.toggleIsListOpen(list)}>
               <FontAwesomeIcon icon={isOpen ? faAngleDown : faAngleRight} />
             </button>
             <span className="ml-1 font-bold">{list.title}</span>
@@ -95,8 +95,7 @@ export default class TodoFolderView extends React.Component<TodoFolderViewProps,
       );
     }
 
-    toggleIsListOpen = (e: React.MouseEvent<HTMLElement>, list: TodoList) => {
-      e.stopPropagation();
+    toggleIsListOpen = (list: TodoList) => {
       this.setState((state:TodoFolderViewState) => {
         const openListIds: string[] =  state.openListIds.includes(list.id) 
           ? state.openListIds.filter((item) => item !== list.id) // exclude
@@ -110,18 +109,15 @@ export default class TodoFolderView extends React.Component<TodoFolderViewProps,
       return this.state.openListIds.includes(list.id);
     }
 
-    onTaskSelection = (e: React.MouseEvent<HTMLElement>, item: TodoTask)=>{
-        e.stopPropagation();
+    onTaskSelection = (item: TodoTask)=>{
         this.props.onSelectTask(item);
     }
 
-    onDelete = (e: React.MouseEvent<HTMLElement>, item: TodoTask)=>{
-      e.stopPropagation();
+    onDelete = (item: TodoTask)=>{
       this.props.onDeleteTask(item);
     }
 
-    onToggleIsComplete = (e: React.ChangeEvent<HTMLInputElement>, task: TodoTask) => {
-      e.stopPropagation();
+    onToggleIsComplete = (task: TodoTask) => {
       let updateTaskModel: UpdateTask = new UpdateTask(task.id);
       updateTaskModel.isComplete = !task.isComplete;
       this.props.onUpdateTask(updateTaskModel);
@@ -131,10 +127,10 @@ export default class TodoFolderView extends React.Component<TodoFolderViewProps,
         const isSelected: Boolean = task.id === this.props.selectedTaskId;
         const styleName: string = isSelected ? " item-selected" : "";
         return (
-          <li key={task.id} className={`item ${styleName} pl-3 pr-1 justify-between`}>
-            <div className='ml-4'>
-              <input type="checkbox" checked={task.isComplete} onChange={(e) => this.onToggleIsComplete(e,task)} className="w-4 h-4 rounded"/>
-              <span className="ml-1" onClick={(e) => this.onTaskSelection(e,task)} >{task.title}</span>
+          <li key={task.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
+            <input type="checkbox" checked={task.isComplete} onChange={() => this.onToggleIsComplete(task)} className="ml-4 w-4 h-4 rounded" />
+            <div className="flex-auto" onClick={() => this.onTaskSelection(task)}>
+              <span className="ml-1">{task.title}</span>
             </div>
             {this.getTaskOptions(task)}
           </li>
@@ -150,7 +146,7 @@ export default class TodoFolderView extends React.Component<TodoFolderViewProps,
             <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
               <Menu.Item>
                 {({ active }) => (
-                  <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, task)}>
+                  <button className={`item ${active ? 'item-selected' : ''}`} onClick={()=> this.onDelete(task)}>
                     <span className='px-2'>Delete</span>
                   </button>
                 )}

@@ -65,13 +65,11 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
         );
     }
 
-    onTaskSelection = (e: React.MouseEvent<HTMLElement>, item: TodoTask)=>{
-        e.stopPropagation();
+    onTaskSelection = (item: TodoTask)=>{
         this.props.onSelectTask(item);
     }
 
-    onDelete = (e: React.MouseEvent<HTMLElement>, item: TodoTask)=>{
-      e.stopPropagation();
+    onDelete = (item: TodoTask)=>{
       this.props.onDeleteTask(item);
     }
 
@@ -85,11 +83,9 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
         const isSelected: Boolean = task.id === this.props.selectedTaskId;
         const styleName: string = isSelected ? " item-selected" : "";
         return (
-          <li key={task.id} onClick={(e) => this.onTaskSelection(e,task)} className={`item ${styleName} pl-3 pr-1 justify-between`}>
-            <div className='ml-2'>
-              <input type="checkbox" checked={task.isComplete} onChange={() => this.onToggleIsComplete(task)} className="w-4 h-4 rounded"/>
-              <span className="ml-1">{task.title}</span>
-            </div>
+          <li key={task.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
+            <input type="checkbox" checked={task.isComplete} onChange={() => this.onToggleIsComplete(task)} className="ml-2 w-4 h-4 rounded" />
+            <span className="ml-1 flex-auto" onClick={() => this.onTaskSelection(task)} >{task.title}</span>
             {this.getTaskOptions(task)}
           </li>
         );
@@ -104,7 +100,7 @@ export default class TodoListView extends React.Component<TodoListViewProps,Todo
             <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
               <Menu.Item>
                 {({ active }) => (
-                  <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, task)}>
+                  <button className={`item ${active ? 'item-selected' : ''}`} onClick={()=> this.onDelete(task)}>
                     <span className='px-2'>Delete</span>
                   </button>
                 )}

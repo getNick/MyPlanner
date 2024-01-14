@@ -38,18 +38,15 @@ interface FoldersListProps {
       })
     }
 
-    onSelection = (e: React.MouseEvent<HTMLElement>, item: TodoFolder | TodoList)=>{
-      e.stopPropagation();
+    onSelection = (item: TodoFolder | TodoList)=>{
       this.props.onSelection(item)
     }
 
-    onDelete = (e: React.MouseEvent<HTMLElement>, item: TodoFolder | TodoList)=>{
-      e.stopPropagation();
+    onDelete = (item: TodoFolder | TodoList)=>{
       this.props.onDelete(item);
     }
 
-    toggleIsFolderOpen = (e: React.MouseEvent<HTMLElement>, folder: TodoFolder) => {
-      e.stopPropagation();
+    toggleIsFolderOpen = (folder: TodoFolder) => {
       this.setState((state:FoldersListState) => {
         const openFoldersIds: string[] =  state.openFoldersIds.includes(folder.id) 
           ? state.openFoldersIds.filter((item) => item !== folder.id) // exclude
@@ -104,15 +101,17 @@ interface FoldersListProps {
           {folder.lists.map((list) => this.getListView(list))}
         </ul> )
       return (
-        <li key={folder.id} onClick={(e) => this.onSelection(e, folder)}>
+        <li key={folder.id}>
           <div className='flex flex-col w-full'>
-            <div className={`item ${styleName} flex w-full justify-between`}>
-              <div className='flex items-center'>
-                <button className='h-8 w-8' onClick={(e) => this.toggleIsFolderOpen(e, folder)}>
+            <div className={`item ${styleName} flex w-full`}>
+              <div className='flex items-center flex-auto'>
+                <button className='h-8 w-8' onClick={(e) => this.toggleIsFolderOpen(folder)}>
                   <FontAwesomeIcon icon={isOpen ? faAngleDown : faAngleRight} />
                 </button>
+                <div className='flex-auto' onClick={(e) => this.onSelection(folder)}>
                 <FontAwesomeIcon icon={isOpen ? faFolderOpen : faFolder} />
-                <span className="ml-1">{folder.title}</span>
+                  <span className="ml-1">{folder.title}</span>
+                </div>
               </div>
               {this.getFolderOptions(folder)}
             </div>
@@ -126,11 +125,9 @@ interface FoldersListProps {
       const isSelected: Boolean = list.id === this.props.selectedItemId;
       const styleName: string = isSelected ? " item-selected" : "";
       return (
-        <li key={list.id} onClick={(e) => this.onSelection(e,list)} className={`item ${styleName} pl-3 pr-1 justify-between`}>
-          <div className='ml-2'>
-            <FontAwesomeIcon icon={faBars}/>
-            <span className="ml-1">{list.title}</span>
-          </div>
+        <li key={list.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
+          <FontAwesomeIcon icon={faBars} className='ml-2' />
+          <span className="ml-1 flex-auto" onClick={() => this.onSelection(list)}>{list.title}</span>
           {this.getListOptions(list)}
         </li>
       );
@@ -145,7 +142,7 @@ interface FoldersListProps {
           <Menu.Items className="absolute z-20 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
-                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, folder)}>
+                <button className={`item ${active ? 'item-selected' : ''}`} onClick={()=> this.onDelete(folder)}>
                   <span className='px-2'>Delete</span>
                 </button>
               )}
@@ -164,7 +161,7 @@ interface FoldersListProps {
           <Menu.Items className="absolute z-20 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
             <Menu.Item>
               {({ active }) => (
-                <button className={`item ${active ? 'item-selected' : ''}`} onClick={(e)=> this.onDelete(e, list)}>
+                <button className={`item ${active ? 'item-selected' : ''}`} onClick={()=> this.onDelete(list)}>
                   <span className='px-2'>Delete</span>
                 </button>
               )}
