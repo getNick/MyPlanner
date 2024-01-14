@@ -16,6 +16,7 @@ interface FoldersListProps {
     onDelete: (item: TodoFolder | TodoList) => void,
     onAddList: (title: string, folderId: string|null) => void,
     onAddFolder: (title: string) => void,
+    preselectedFolder: TodoFolder | undefined,
   }
 
   interface FoldersListState{
@@ -80,6 +81,7 @@ interface FoldersListProps {
             </button>
             <AddListModal isOpen={this.state.isAddListModalOpen} 
                           folders={folders}
+                          preselectedFolder={this.props.preselectedFolder}
                           onAddList={this.props.onAddList}
                           onAddFolder={this.props.onAddFolder}
                           onClose={()=> this.setIsAddListModalOpen(false)}/>

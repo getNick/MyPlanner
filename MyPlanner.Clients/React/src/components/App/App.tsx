@@ -19,6 +19,7 @@ interface AppState{
   selectedTask: TodoTask | undefined,
   isSidebarOpen: boolean,
   isTaskBarOpen: boolean,
+  preselectedFolder: TodoFolder | undefined,
 }
 
 export default class App extends React.Component<{},AppState>{
@@ -31,6 +32,7 @@ export default class App extends React.Component<{},AppState>{
       selectedTask : undefined,
       isSidebarOpen : true,
       isTaskBarOpen : false,
+      preselectedFolder : undefined,
     }
   }
 
@@ -89,6 +91,7 @@ export default class App extends React.Component<{},AppState>{
     const selectedItem = await this.todoService.getFolder(folderId);
     this.setState({
       folders : items,
+      preselectedFolder : selectedItem,
       selectedFolderOrList : selectedItem,
     })
   }
@@ -236,7 +239,8 @@ export default class App extends React.Component<{},AppState>{
                        onSelection={this.onFolderOrListSelection}
                        onAddList={this.onAddList}
                        onAddFolder={this.onAddFolder}
-                       onDelete={this.onDeleteFolderOrList}/>
+                       onDelete={this.onDeleteFolderOrList}
+                       preselectedFolder={this.state.preselectedFolder}/>
         </div>
 
         <div className='h-full w-full overflow-auto p-1'>
