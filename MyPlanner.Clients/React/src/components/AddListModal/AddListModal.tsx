@@ -86,25 +86,31 @@ const AddListModal: React.FC<AddListModalProps> = (props)=>{
 
                         <div className="flex flex-col space-y-6">
                             <input placeholder="Name" onBlur={onInput} className="p-2 mt-2 border-gray-200 border-2 rounded"></input>
-                            <Listbox value={selectedFolder} onChange={(item)=> setSelectedFolder(item)}>
-                                <div className="relative">
-                                    <Listbox.Button className="relative w-full cursor-default rounded-lg bg-white py-2 pl-3 pr-10 text-left shadow-md focus:outline-none">
-                                        {selectedFolder.name}
-                                    </Listbox.Button>
-                                    <Listbox.Options className="absolute z-20 mt-1 min-h-60 w-full overflow-auto rounded-md bg-white p-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
-                                        {foldersList.map((folder) => getOptionContentView(folder))}
+                            <div className="flex items-center">
+                                <span>To folder:</span>
+                                <div className="flex-auto ml-2">
+                                    <Listbox value={selectedFolder} onChange={(item) => setSelectedFolder(item)}>
+                                        <div className="relative">
+                                            <Listbox.Button className="relative w-full cursor-default rounded-lg bg-white py-2 pl-3 pr-10 text-left shadow-md focus:outline-none">
+                                                {selectedFolder.name}
+                                            </Listbox.Button>
+                                            <Listbox.Options className="absolute z-20 mt-1 min-h-60 w-full overflow-auto rounded-md bg-white p-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
+                                                {foldersList.map((folder) => getOptionContentView(folder))}
 
-                                        <div className="flex space-x-1 h-8">
-                                            <input placeholder="Add new folder"
-                                                   value={newFolderTitle}
-                                                   onChange={onNewFolderNameChanged} 
-                                                   className="basis-full pl-1 border-gray-200 border-2 rounded"/>
-                                            <button onClick={onAddFolder} 
-                                                    className="w-20 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded">Add</button>
+                                                <div className="flex space-x-1 h-8">
+                                                    <input placeholder="Add new folder"
+                                                        value={newFolderTitle}
+                                                        onChange={onNewFolderNameChanged}
+                                                        className="basis-full pl-1 border-gray-200 border-2 rounded" />
+                                                    <button onClick={onAddFolder}
+                                                        className="w-20 bg-blue-500 hover:bg-blue-700 text-white font-bold rounded">Add</button>
+                                                </div>
+                                            </Listbox.Options>
                                         </div>
-                                    </Listbox.Options>
+                                    </Listbox>
                                 </div>
-                            </Listbox>
+                            </div>
+                           
                             <div className="flex justify-end space-x-2 rounded-b">
                                 <button onClick={props.onClose}
                                     className="w-20 bg-transparent hover:bg-gray-200 text-gray-600 font-semibold py-2 px-4 border-2 border-gray-200 rounded">Cancel</button>
