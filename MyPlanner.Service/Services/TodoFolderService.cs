@@ -52,7 +52,12 @@ public class TodoFolderService : ITodoFolderService
 
     public async Task<TodoFolder?> GetAsync(Guid id)
     {
-        return await Task.Run(() => _unitOfWork.Folders.GetById(id));
+        return await Task.Run(
+            () => _unitOfWork.Folders
+            .Get(x=>x.Id == id)
+            .Include(x=>x.Lists)
+            .ThenInclude(x=> x.Tasks)
+            .FirstOrDefaultAsync());
     }
 
     public async Task<bool> UpdateAsync(UpdateFolderModel model)
