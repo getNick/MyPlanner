@@ -4,7 +4,7 @@
 }
 
 .item{
-    @apply flex h-10 p-1 cursor-pointer items-center w-full rounded
+    @apply flex min-h-10 p-1 cursor-pointer items-center w-full rounded
     text-zinc-900 hover:bg-slate-300
 }
 .item-selected{
