@@ -1,6 +1,7 @@
 import TodoFolder from "../entities/TodoFolder";
 import TodoList from "../entities/TodoList";
 import TodoTask from "../entities/TodoTask";
+import UpdateFolder from "../entities/UpdateFolder";
 import UpdateList from "../entities/UpdateList";
 import UpdateTask from "../entities/UpdateTask";
 
@@ -70,6 +71,10 @@ export default class TodoService{
 
     public async updateList(updateList: UpdateList): Promise<boolean>{
       const res = await this.sendPutRequest("lists", updateList);
+      return res;
+    }
+    public async updateFolder(updateFolder: UpdateFolder): Promise<boolean>{
+      const res = await this.sendPutRequest("folders", updateFolder);
       return res;
     }
 

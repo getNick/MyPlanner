@@ -9,6 +9,8 @@ import TodoTask from '../../entities/TodoTask';
 import UpdateTask from '../../entities/UpdateTask';
 import TodoTaskView from '../TodoTaskView/TodoTaskView';
 import UpdateList from '../../entities/UpdateList';
+import TodoFolderView from '../TodoFolderView/TodoFolderView';
+import UpdateFolder from '../../entities/UpdateFolder';
 
 interface AppState{
   folders: TodoFolder[] | undefined,
@@ -124,6 +126,27 @@ export default class App extends React.Component<{},AppState>{
     })
   }
 
+  onUpdateFolder = async (folder: UpdateFolder) =>{
+    const isUpdated = await this.todoService.updateFolder(folder);
+    if(isUpdated === false)
+      return;
+
+    const folderId: string = folder.id;
+    const selectedFolderId: string | undefined = this.state.selectedFolderOrList instanceof TodoFolder
+      ? this.state.selectedFolderOrList.id
+      : undefined;
+    if(selectedFolderId === folderId){
+      const selectedList = await this.todoService.getFolder(folderId);
+      this.setState({
+        selectedFolderOrList : selectedList,
+      })
+    }
+    const items = await this.todoService.getFolders();
+    this.setState({
+        folders : items,
+    })
+  }
+
   onAddTask = async (title: string, listId: string) =>{
     const taskId = await this.todoService.createTask(title, listId);
     const selectedList = await this.todoService.getList(listId);
@@ -136,10 +159,7 @@ export default class App extends React.Component<{},AppState>{
   onDeleteTask = async (task: TodoTask) =>{
     const isRemoved: boolean = await this.todoService.deleteTask(task.id);
     if(isRemoved){
-      const selectedList = await this.todoService.getList(task.listId);
-      this.setState({
-        selectedFolderOrList : selectedList,
-      })
+      await this.updateSelectedFolderOfList();
     }
   }
 
@@ -148,14 +168,26 @@ export default class App extends React.Component<{},AppState>{
     if(isUpdated === false)
       return;
 
-    const selectedListId: string | undefined = this.state.selectedFolderOrList instanceof TodoList
-      ? this.state.selectedFolderOrList.id
-      : undefined;
-    if(selectedListId !== undefined){
-      const selectedList = await this.todoService.getList(selectedListId);
+    const selectedTask : TodoTask | undefined = await this.todoService.getTask(task.id);
+    this.setState({
+      selectedTask : selectedTask,
+    });
+
+    await this.updateSelectedFolderOfList();
+  }
+
+  updateSelectedFolderOfList = async () => {
+    if(this.state.selectedFolderOrList instanceof TodoList){
+      const selectedList = await this.todoService.getList(this.state.selectedFolderOrList.id);
       this.setState({
         selectedFolderOrList : selectedList,
-      })
+      });
+    }
+    else if(this.state.selectedFolderOrList instanceof TodoFolder){
+      const selectedFolder = await this.todoService.getFolder(this.state.selectedFolderOrList.id);
+      this.setState({
+        selectedFolderOrList : selectedFolder,
+      });
     }
   }
 
@@ -173,7 +205,8 @@ export default class App extends React.Component<{},AppState>{
 
   render(): React.ReactNode {
 
-    const listView = this.state.selectedFolderOrList instanceof TodoList 
+    const listView = this.state.selectedFolderOrList === undefined ? undefined : 
+    this.state.selectedFolderOrList instanceof TodoList 
     ? (<TodoListView list={this.state.selectedFolderOrList} 
                       selectedTaskId={this.state.selectedTask?.id}
                       openSidebar={()=> this.setIsSidebarOpen(true)}
@@ -182,7 +215,14 @@ export default class App extends React.Component<{},AppState>{
                       onAddTask={this.onAddTask} 
                       onDeleteTask={this.onDeleteTask} 
                       onUpdateTask={this.onUpdateTask}/>) 
-    : undefined;
+    : (<TodoFolderView folder={this.state.selectedFolderOrList}
+                      selectedTaskId={this.state.selectedTask?.id}
+                      openSidebar={()=> this.setIsSidebarOpen(true)}
+                      onUpdateFolder={this.onUpdateFolder}
+                      onAddList={this.onAddList}
+                      onDeleteTask={this.onDeleteTask} 
+                      onUpdateTask={this.onUpdateTask}
+                      onSelectTask={this.onSelectTask}/>);
 
     const folderContainerStyle: string = this.state.isSidebarOpen ? "" : " -translate-x-full";
     const taskContainerStyle: string = this.state.isTaskBarOpen ? "" : "translate-x-full";
