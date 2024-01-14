@@ -37,6 +37,9 @@ export default class App extends React.Component<{},AppState>{
   }
 
   todoService = new TodoService();
+  isMobile = window.matchMedia(
+    "(pointer: coarse) and (hover: none)"
+  ).matches;
 
   componentDidMount(): void {
     this.loadAllItems();
@@ -152,11 +155,9 @@ export default class App extends React.Component<{},AppState>{
 
   onAddTask = async (title: string, listId: string) =>{
     const taskId = await this.todoService.createTask(title, listId);
-    const selectedList = await this.todoService.getList(listId);
-    this.setState({
-      selectedFolderOrList : selectedList,
-    })
-    await this.onSelectTaskById(taskId);
+    await this.updateSelectedFolderOfList();
+    if(this.isMobile === false)
+      await this.onSelectTaskById(taskId);
   }
   
   onDeleteTask = async (task: TodoTask) =>{
