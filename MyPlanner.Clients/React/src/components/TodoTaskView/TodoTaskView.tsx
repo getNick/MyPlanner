@@ -4,62 +4,61 @@ import UpdateTask from "../../entities/UpdateTask";
 import TextInput from "../TextInput/TextInput";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { useTodoContext } from "../../contexts/TodoContext";
 
-interface TodoTaskViewProps{
+interface TodoTaskViewProps {
     task?: TodoTask | undefined,
-    onUpdateTask: (task: UpdateTask) => void,
-    closeTaskBar: () => void,
 }
 
-interface TodoTaskViewState{
+const TodoTaskView: React.FC<TodoTaskViewProps> = (props: TodoTaskViewProps) => {
+    const { task } = props;
 
-}
+    const { onUpdateTask,
+        setIsTaskbarOpen } = useTodoContext();
 
-
-export default class TodoTaskView extends React.Component<TodoTaskViewProps,TodoTaskViewState>{
-    onTitleChanged = (newTitle: string) => {
-        if(this.props.task === undefined)
+    const onTitleChanged = (newTitle: string) => {
+        if (task === undefined)
             return;
-        let changeTitleChange: UpdateTask = new UpdateTask(this.props.task.id);
+        let changeTitleChange: UpdateTask = new UpdateTask(task.id);
         changeTitleChange.title = newTitle;
-        this.props.onUpdateTask(changeTitleChange)
+        onUpdateTask(changeTitleChange)
     }
-    onDescriptionChanged = (newDescription: string) => {
-        if(this.props.task === undefined)
+    const onDescriptionChanged = (newDescription: string) => {
+        if (task === undefined)
             return;
-        let changeDescriptionChange: UpdateTask = new UpdateTask(this.props.task.id);
+        let changeDescriptionChange: UpdateTask = new UpdateTask(task.id);
         changeDescriptionChange.description = newDescription;
-        this.props.onUpdateTask(changeDescriptionChange)
+        onUpdateTask(changeDescriptionChange)
     }
 
-    render(): React.ReactNode {
-        if(this.props.task === undefined){
-            return (
-                <div className="flex w-full h-full items-center justify-center">
-                    <h3>Click task title to view the detail</h3>
-                </div>
-            );
-        }
-
+    if (task === undefined) {
         return (
-            <div className="flex flex-col h-full w-full m-1">
-                <div className="flex h-10 items-center">
-                    <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={this.props.closeTaskBar}>
-                        <FontAwesomeIcon icon={faChevronLeft} />
-                    </button>
-
-                    <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
-                        onSubmit={this.onTitleChanged}
-                        placeholderText="Title"
-                        value={this.props.task.title} />
-                </div>
-
-                <TextInput styleName="w-full flex-auto p-1"
-                    onSubmit={this.onDescriptionChanged}
-                    placeholderText="Description"
-                    useTextArea={true}
-                    value={this.props.task.description} />
+            <div className="flex w-full h-full items-center justify-center">
+                <h3>Click task title to view the detail</h3>
             </div>
-        )
+        );
     }
+
+    return (
+        <div className="flex flex-col h-full w-full m-1">
+            <div className="flex h-10 items-center">
+                <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={() => setIsTaskbarOpen(false)}>
+                    <FontAwesomeIcon icon={faChevronLeft} />
+                </button>
+
+                <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
+                    onSubmit={onTitleChanged}
+                    placeholderText="Title"
+                    value={task.title} />
+            </div>
+
+            <TextInput styleName="w-full flex-auto p-1"
+                onSubmit={onDescriptionChanged}
+                placeholderText="Description"
+                useTextArea={true}
+                value={task.description} />
+        </div>
+    )
 }
+
+export default TodoTaskView;
