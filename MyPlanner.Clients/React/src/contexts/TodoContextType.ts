@@ -6,32 +6,24 @@ import UpdateList from "../entities/UpdateList";
 import UpdateTask from "../entities/UpdateTask";
 
 export type TodoContextType = {
-  folders: TodoFolder[] | undefined,
-  selectedFolderOrList: TodoFolder | TodoList | undefined,
-  selectedTask: TodoTask | undefined,
+  fetchFolders: () => Promise<TodoFolder[] | undefined>;
+  fetchFolder: (folderId: string | undefined) => Promise<TodoFolder | undefined>;
+  fetchList: (listId: string | undefined) => Promise<TodoList | undefined>;
+  fetchTask: (taskId: string | undefined) => Promise<TodoTask | undefined>;
 
-  onFolderOrListSelection : (item: TodoFolder | TodoList) => void;
-  onSelectTask : (task: TodoTask) => void;
-  onSelectTaskById : (taskId: string) => void;
+  onAddFolder: (title: string) => void,
+  onAddList: (title: string, folderId: string | null) => void,
+  onAddTask: (title: string, listId: string) => void;
 
-  onAddFolder : (title: string) => void,
-  onAddList : (title: string, folderId: string|null) => void,
-  onAddTask : (title: string, listId: string) => void;
-
-  onUpdateFolder : (folder: UpdateFolder) => void;
-  onUpdateList : (list: UpdateList) => void;
-  onUpdateTask : (task: UpdateTask) => void;
+  onUpdateFolder: (folder: UpdateFolder) => void;
+  onUpdateList: (list: UpdateList) => void;
+  onUpdateTask: (task: UpdateTask) => void;
 
   onDeleteFolderOrList: (item: TodoFolder | TodoList) => void;
-  onDeleteTask : (task: TodoTask) => void;
+  onDeleteTask: (task: TodoTask) => void;
 
   openFoldersIds: string[],
-  toggleIsFolderOpen : (folder: TodoFolder) => void;
+  toggleIsFolderOpen: (folder: TodoFolder) => void;
   openListsIds: string[],
-  toggleIsListOpen : (list: TodoList) => void;
-
-  isSidebarOpen : boolean,
-  setIsSidebarOpen : (isOpen: boolean) => void;
-  isTaskbarOpen : boolean,
-  setIsTaskbarOpen : (isOpen: boolean) => void;
+  toggleIsListOpen: (list: TodoList) => void;
 }

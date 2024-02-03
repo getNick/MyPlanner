@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import TodoList from "../../entities/TodoList";
 import './TodoFolderView.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -12,29 +12,34 @@ import UpdateList from "../../entities/UpdateList";
 import TodoFolder from "../../entities/TodoFolder";
 import UpdateFolder from "../../entities/UpdateFolder";
 import { useTodoContext } from "../../contexts/TodoContext";
+import { useLoaderData } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
 
 
-interface TodoFolderViewProps {
-  folder: TodoFolder,
-}
-
-const TodoFolderView: React.FC<TodoFolderViewProps> = (props: TodoFolderViewProps) => {
-  const { folder } = props;
+const TodoFolderView: React.FC = () => {
+  const navigate = useNavigate();
+  const folder = useLoaderData() as TodoFolder | undefined;
 
   const {
-    selectedTask,
-    onSelectTask,
     onAddList,
     onDeleteTask,
-    onUpdateFolder, onUpdateTask,
-    openListsIds, toggleIsListOpen,
-    setIsSidebarOpen} = useTodoContext();
+    onUpdateFolder,
+    onUpdateTask,
+    openListsIds,
+    toggleIsListOpen,
+  } = useTodoContext();
 
   const onNewListSubmit = (newListTitle: string) => {
+    if (folder === undefined)
+      return;
+
     onAddList(newListTitle, folder.id);
   }
 
   const onTitleChanged = (newTitle: string) => {
+    if (folder === undefined)
+      return;
+
     let updateFolderModel: UpdateFolder = new UpdateFolder(folder.id);
     updateFolderModel.title = newTitle;
     onUpdateFolder(updateFolderModel);
@@ -48,6 +53,14 @@ const TodoFolderView: React.FC<TodoFolderViewProps> = (props: TodoFolderViewProp
 
   const getIsListOpen = (list: TodoList): boolean => {
     return openListsIds.includes(list.id);
+  }
+
+  const navigateBack = () => {
+    navigate(-1);
+  }
+
+  const navigateToTask = (task: TodoTask) => {
+    navigate(`task/${task.id}`)
   }
 
   const getTaskOptions = (task: TodoTask): React.ReactNode => {
@@ -70,12 +83,12 @@ const TodoFolderView: React.FC<TodoFolderViewProps> = (props: TodoFolderViewProp
   }
 
   const getTaskView = (task: TodoTask): React.ReactNode => {
-    const isSelected: Boolean = task.id === selectedTask?.id;
+    const isSelected: Boolean = false;
     const styleName: string = isSelected ? " item-selected" : "";
     return (
       <li key={task.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
         <input type="checkbox" checked={task.isComplete} onChange={() => onToggleIsComplete(task)} className="ml-4 w-4 h-4 rounded" />
-        <div className="flex-auto" onClick={() => onSelectTask(task)}>
+        <div className="flex-auto" onClick={() => navigateToTask(task)}>
           <span className="ml-1">{task.title}</span>
         </div>
         {getTaskOptions(task)}
@@ -104,13 +117,13 @@ const TodoFolderView: React.FC<TodoFolderViewProps> = (props: TodoFolderViewProp
     );
   }
 
-  const listsView: React.ReactNode = folder.lists.map((list) => getListView(list));
-  const folderTitle: string = folder.title;
+  const listsView: React.ReactNode = folder?.lists.map((list) => getListView(list));
+  const folderTitle: string | undefined = folder?.title;
 
   return (
     <div className="m-1">
       <div className="flex h-10 items-center">
-        <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={() => setIsSidebarOpen(true)}>
+        <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={navigateBack}>
           <FontAwesomeIcon icon={faChevronLeft} />
         </button>
 

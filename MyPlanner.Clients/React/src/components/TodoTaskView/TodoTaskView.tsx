@@ -1,20 +1,18 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import TodoTask from "../../entities/TodoTask";
 import UpdateTask from "../../entities/UpdateTask";
 import TextInput from "../TextInput/TextInput";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { useTodoContext } from "../../contexts/TodoContext";
+import { useLoaderData, useNavigate } from "react-router-dom";
 
-interface TodoTaskViewProps {
-    task?: TodoTask | undefined,
-}
+const TodoTaskView: React.FC = () => {
+    const task = useLoaderData() as TodoTask | undefined;
+    const navigate = useNavigate();
 
-const TodoTaskView: React.FC<TodoTaskViewProps> = (props: TodoTaskViewProps) => {
-    const { task } = props;
+    const { onUpdateTask } = useTodoContext();
 
-    const { onUpdateTask,
-        setIsTaskbarOpen } = useTodoContext();
 
     const onTitleChanged = (newTitle: string) => {
         if (task === undefined)
@@ -31,32 +29,28 @@ const TodoTaskView: React.FC<TodoTaskViewProps> = (props: TodoTaskViewProps) => 
         onUpdateTask(changeDescriptionChange)
     }
 
-    if (task === undefined) {
-        return (
-            <div className="flex w-full h-full items-center justify-center">
-                <h3>Click task title to view the detail</h3>
-            </div>
-        );
+    const navigateBack = () => {
+        navigate(-1);
     }
 
     return (
         <div className="flex flex-col h-full w-full m-1">
             <div className="flex h-10 items-center">
-                <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={() => setIsTaskbarOpen(false)}>
+                <button className="h-8 w-8 rounded hover:bg-slate-200" onClick={navigateBack}>
                     <FontAwesomeIcon icon={faChevronLeft} />
                 </button>
 
                 <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
                     onSubmit={onTitleChanged}
                     placeholderText="Title"
-                    value={task.title} />
+                    value={task?.title} />
             </div>
 
             <TextInput styleName="w-full flex-auto p-1"
                 onSubmit={onDescriptionChanged}
                 placeholderText="Description"
                 useTextArea={true}
-                value={task.description} />
+                value={task?.description} />
         </div>
     )
 }
