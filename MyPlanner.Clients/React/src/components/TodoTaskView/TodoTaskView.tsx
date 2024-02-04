@@ -8,25 +8,31 @@ import { useTodoContext } from "../../contexts/TodoContext";
 import { useLoaderData, useNavigate } from "react-router-dom";
 
 const TodoTaskView: React.FC = () => {
-    const task = useLoaderData() as TodoTask | undefined;
+    const taskId = useLoaderData() as string;
     const navigate = useNavigate();
+    const { todoService } = useTodoContext();
+    const [task, setTask] = useState<TodoTask | undefined>();
 
-    const { onUpdateTask } = useTodoContext();
-
-
-    const onTitleChanged = (newTitle: string) => {
-        if (task === undefined)
-            return;
-        let changeTitleChange: UpdateTask = new UpdateTask(task.id);
-        changeTitleChange.title = newTitle;
-        onUpdateTask(changeTitleChange)
+    const updateTask = async () => {
+        const data = await todoService.getTask(taskId);
+        setTask(data);
     }
-    const onDescriptionChanged = (newDescription: string) => {
-        if (task === undefined)
-            return;
-        let changeDescriptionChange: UpdateTask = new UpdateTask(task.id);
+
+    useEffect(() => {
+        updateTask();
+    }, []);
+
+    const onTitleChanged = async (newTitle: string) => {
+        let changeTitleChange: UpdateTask = new UpdateTask(taskId);
+        changeTitleChange.title = newTitle;
+        await todoService.updateTask(changeTitleChange);
+        updateTask();
+    }
+    const onDescriptionChanged = async (newDescription: string) => {
+        let changeDescriptionChange: UpdateTask = new UpdateTask(taskId);
         changeDescriptionChange.description = newDescription;
-        onUpdateTask(changeDescriptionChange)
+        await todoService.updateTask(changeDescriptionChange);
+        updateTask();
     }
 
     const navigateBack = () => {

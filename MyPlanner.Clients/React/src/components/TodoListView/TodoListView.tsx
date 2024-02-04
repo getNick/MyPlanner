@@ -13,36 +13,49 @@ import { useLoaderData } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
 
 const TodoListView: React.FC = () => {
-  const list = useLoaderData() as TodoList | undefined;
+  const listId = useLoaderData() as string;
   const navigate = useNavigate();
+  const [list, setList] = useState<TodoList | undefined>();
 
-  const {
-    onAddTask,
-    onDeleteTask,
-    onUpdateList,
-    onUpdateTask,
-  } = useTodoContext();
+  const { todoService, getCachedTitle } = useTodoContext();
 
-  const onNewTaskSubmit = (newTaskTitle: string) => {
-    if (list === undefined)
-      return;
-
-    onAddTask(newTaskTitle, list.id);
+  const updateList = async () => {
+    const data = await todoService.getList(listId);
+    setList(data);
   }
 
-  const onTitleChanged = (newTitle: string) => {
-    if (list === undefined)
-      return;
+  useEffect(() => {
+    updateList();
+  }, []);
 
-    let changeTitleChange: UpdateList = new UpdateList(list.id);
+  let title = getCachedTitle(listId);
+  if (title === undefined)
+    title = list?.title;
+
+  const onNewTaskSubmit = async (newTaskTitle: string) => {
+    await todoService.createTask(newTaskTitle, listId);
+    updateList();
+  }
+
+  const onTitleChanged = async (newTitle: string) => {
+    let changeTitleChange: UpdateList = new UpdateList(listId);
     changeTitleChange.title = newTitle;
-    onUpdateList(changeTitleChange)
+    await todoService.updateList(changeTitleChange);
+    updateList();
   }
 
-  const onToggleIsComplete = (task: TodoTask) => {
+  const onToggleIsComplete = async (task: TodoTask) => {
     let updateTaskModel: UpdateTask = new UpdateTask(task.id);
     updateTaskModel.isComplete = !task.isComplete;
-    onUpdateTask(updateTaskModel);
+    await todoService.updateTask(updateTaskModel);
+    updateList();
+  }
+
+  const onDeleteTask = async (task: TodoTask) => {
+    const isRemoved: boolean = await todoService.deleteTask(task.id);
+    if (isRemoved) {
+      updateList();
+    }
   }
 
   const navigateBack = () => {
@@ -85,7 +98,6 @@ const TodoListView: React.FC = () => {
   }
 
   const tasksView: React.ReactNode = list?.tasks.map((folder) => getTaskView(folder));
-  const listTitle: string | undefined = list?.title;
 
   return (
     <div className="m-1">
@@ -97,11 +109,11 @@ const TodoListView: React.FC = () => {
         <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
           onSubmit={onTitleChanged}
           placeholderText="Title"
-          value={listTitle} />
+          value={title} />
       </div>
 
       <TextInput styleName="w-full h-10 m-1 p-1 rounded bg-gray-100 focus:bg-white focus:border-blue-500 focus:border"
-        placeholderText={`Add task to '${listTitle}', press Enter to save`}
+        placeholderText={`Add task to '${title}', press Enter to save`}
         clearTextOnSubmit={true}
         onSubmit={onNewTaskSubmit} />
       <ul>

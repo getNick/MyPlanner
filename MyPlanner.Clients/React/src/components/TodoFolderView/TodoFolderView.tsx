@@ -15,44 +15,53 @@ import { useTodoContext } from "../../contexts/TodoContext";
 import { useLoaderData } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
 
-
 const TodoFolderView: React.FC = () => {
   const navigate = useNavigate();
-  const folder = useLoaderData() as TodoFolder | undefined;
+  const folderId = useLoaderData() as string;
+  const [folder, setFolder] = useState<TodoFolder | undefined>();
+  const { todoService, openListsIds, getCachedTitle, toggleIsListOpen } = useTodoContext();
 
-  const {
-    onAddList,
-    onDeleteTask,
-    onUpdateFolder,
-    onUpdateTask,
-    openListsIds,
-    toggleIsListOpen,
-  } = useTodoContext();
-
-  const onNewListSubmit = (newListTitle: string) => {
-    if (folder === undefined)
-      return;
-
-    onAddList(newListTitle, folder.id);
+  const updateFolder = async () => {
+    const data = await todoService.getFolder(folderId);
+    setFolder(data);
   }
 
-  const onTitleChanged = (newTitle: string) => {
-    if (folder === undefined)
-      return;
+  useEffect(() => {
+    updateFolder();
+  }, []);
 
-    let updateFolderModel: UpdateFolder = new UpdateFolder(folder.id);
-    updateFolderModel.title = newTitle;
-    onUpdateFolder(updateFolderModel);
-  }
-
-  const onToggleIsComplete = (task: TodoTask) => {
-    let updateTaskModel: UpdateTask = new UpdateTask(task.id);
-    updateTaskModel.isComplete = !task.isComplete;
-    onUpdateTask(updateTaskModel);
-  }
+  let folderName = getCachedTitle(folderId);
+  if (folderName === undefined)
+    folderName = folder?.title;
 
   const getIsListOpen = (list: TodoList): boolean => {
-    return openListsIds.includes(list.id);
+    return openListsIds.has(list.id);
+  }
+
+  const onNewListSubmit = async (newListTitle: string) => {
+    await todoService.createList(newListTitle, folderId);
+    updateFolder();
+  }
+
+  const onTitleChanged = async (newTitle: string) => {
+    let updateFolderModel: UpdateFolder = new UpdateFolder(folderId);
+    updateFolderModel.title = newTitle;
+    await todoService.updateFolder(updateFolderModel);
+    updateFolder();
+  }
+
+  const onToggleIsComplete = async (task: TodoTask) => {
+    let updateTaskModel: UpdateTask = new UpdateTask(task.id);
+    updateTaskModel.isComplete = !task.isComplete;
+    await todoService.updateTask(updateTaskModel);
+    updateFolder();
+  }
+
+  const onDeleteTask = async (task: TodoTask) => {
+    const isRemoved: boolean = await todoService.deleteTask(task.id);
+    if (isRemoved) {
+      await updateFolder();
+    }
   }
 
   const navigateBack = () => {
@@ -117,9 +126,6 @@ const TodoFolderView: React.FC = () => {
     );
   }
 
-  const listsView: React.ReactNode = folder?.lists.map((list) => getListView(list));
-  const folderTitle: string | undefined = folder?.title;
-
   return (
     <div className="m-1">
       <div className="flex h-10 items-center">
@@ -130,15 +136,16 @@ const TodoFolderView: React.FC = () => {
         <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
           onSubmit={onTitleChanged}
           placeholderText="Title"
-          value={folderTitle} />
+          value={folderName} />
       </div>
 
       <TextInput styleName="w-full h-10 m-1 p-1 rounded bg-gray-100 focus:bg-white focus:border-blue-500 focus:border"
-        placeholderText={`Add list to '${folderTitle}' folder, press Enter to save`}
+        placeholderText={`Add list to '${folderName}' folder, press Enter to save`}
         clearTextOnSubmit={true}
         onSubmit={onNewListSubmit} />
+
       <ul>
-        {listsView}
+        {folder?.lists.map((list) => getListView(list))}
       </ul>
     </div>
   );

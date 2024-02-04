@@ -1,23 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { TodoContextType } from "./TodoContextType";
 import TodoFolder from "../entities/TodoFolder";
 import TodoList from "../entities/TodoList";
 import TodoService from "../services/TodoService";
 import TodoTask from "../entities/TodoTask";
-import UpdateFolder from "../entities/UpdateFolder";
-import UpdateList from "../entities/UpdateList";
-import UpdateTask from "../entities/UpdateTask";
 
 export const TodoContext = React.createContext<TodoContextType | null>(null);
 
 const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const todoService = new TodoService();
-  const [folders, setFolders] = useState<TodoFolder[] | undefined>();
-  const [openFoldersIds, setOpenFoldersIds] = useState<string[]>([]);
-  const [openListsIds, setOpenListsIds] = useState<string[]>([]);
+  const [titleCache] = useState<{ [key: string]: string }>({});
+  const [openFoldersIds, setOpenFoldersIds] = useState<Set<string>>(new Set<string>());
+  const [openListsIds, setOpenListsIds] = useState<Set<string>>(new Set<string>());
 
   const fetchFolders = async (): Promise<TodoFolder[] | undefined> => {
     const items = await todoService.getFolders();
+    updateTitleCache(items);
     return items;
   }
 
@@ -44,90 +42,49 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data;
   }
 
-  const updateFolders = async () => {
-    const items = await todoService.getFolders();
-    setFolders(items);
+  const getCachedTitle = (id: string | undefined): string | undefined => {
+    if (id === undefined)
+      return undefined;
+
+    if (id in titleCache)
+      return titleCache[id];
+    return undefined;
   }
 
-  const onDeleteFolderOrList = async (item: TodoFolder | TodoList) => {
-    const isRemoved: boolean = item instanceof TodoFolder
-      ? await todoService.deleteFolder(item.id)
-      : await todoService.deleteList(item.id);
-
-    if (isRemoved) {
-      const items = await todoService.getFolders();
-      setFolders(items);
-    }
-  }
-
-  const onDeleteTask = async (task: TodoTask) => {
-    const isRemoved: boolean = await todoService.deleteTask(task.id);
-    if (isRemoved) {
-      await updateFolders();
-    }
-  }
-
-  const onAddList = async (title: string, folderId: string | null) => {
-    const listId = await todoService.createList(title, folderId);
-    const items = await todoService.getFolders();
-    setFolders(items);
-  }
-
-  const onAddFolder = async (title: string) => {
-    const folderId = await todoService.createFolder(title);
-    const items = await todoService.getFolders();
-    setFolders(items);
-  }
-
-  const onAddTask = async (title: string, listId: string) => {
-    const taskId = await todoService.createTask(title, listId);
-    await updateFolders();
-  }
-
-  const onUpdateFolder = async (folder: UpdateFolder) => {
-    const isUpdated = await todoService.updateFolder(folder);
-    if (isUpdated === false)
-      return;
-
-    await updateFolders();
-  }
-
-  const onUpdateList = async (list: UpdateList) => {
-    const isUpdated = await todoService.updateList(list);
-    if (isUpdated === false)
-      return;
-
-    await updateFolders();
-  }
-
-  const onUpdateTask = async (task: UpdateTask) => {
-    const isUpdated = await todoService.updateTask(task);
-    if (isUpdated === false)
-      return;
-
-    await updateFolders();
+  const updateTitleCache = async (folders: TodoFolder[]) => {
+    folders.forEach(folder => {
+      titleCache[folder.id] = folder.title;
+      folder.lists.forEach(list => {
+        titleCache[list.id] = list.title;
+      })
+    });
   }
 
   const toggleIsFolderOpen = (folder: TodoFolder) => {
-    const newFoldersIds: string[] = openFoldersIds.includes(folder.id)
-      ? openFoldersIds.filter((item) => item !== folder.id) // exclude
-      : [...openFoldersIds, folder.id]; // add
-    setOpenFoldersIds(newFoldersIds);
+    const newSet = new Set(openFoldersIds);
+    if (newSet.has(folder.id)) {
+      newSet.delete(folder.id);
+    } else {
+      newSet.add(folder.id);
+    }
+    setOpenFoldersIds(newSet);
   }
 
   const toggleIsListOpen = (list: TodoList) => {
-    const newListsIds: string[] = openListsIds.includes(list.id)
-      ? openListsIds.filter((item) => item !== list.id) // exclude
-      : [...openListsIds, list.id]; // add
-    setOpenListsIds(newListsIds);
+    const newSet = new Set(openListsIds);
+    if (newSet.has(list.id)) {
+      newSet.delete(list.id);
+    } else {
+      newSet.add(list.id);
+    }
+    setOpenListsIds(newSet);
   }
 
   return (
     <TodoContext.Provider value={{
+      todoService,
       fetchFolders, fetchFolder, fetchList, fetchTask,
-      onAddFolder, onAddList, onAddTask,
-      onUpdateFolder, onUpdateList, onUpdateTask,
-      onDeleteFolderOrList, onDeleteTask,
+      getCachedTitle,
       openFoldersIds, toggleIsFolderOpen,
       openListsIds, toggleIsListOpen,
     }}>

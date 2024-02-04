@@ -1,5 +1,5 @@
 import './FoldersList.css'
-import React, { FC, useState } from 'react';
+import React, { FC, useEffect, useState } from 'react';
 import TodoFolder from '../../entities/TodoFolder';
 import TodoList from '../../entities/TodoList';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -12,18 +12,41 @@ import { useLoaderData, useNavigate } from 'react-router-dom';
 
 
 const FoldersList: React.FC = () => {
-  const folders = useLoaderData() as TodoFolder[] | undefined;
-
-  const {
-    onAddFolder, onAddList,
-    onDeleteFolderOrList,
-    openFoldersIds, toggleIsFolderOpen } = useTodoContext();
-
   const navigate = useNavigate();
+  const { fetchFolders, todoService, openFoldersIds, toggleIsFolderOpen } = useTodoContext();
+  const [folders, setFolders] = useState<TodoFolder[] | undefined>();
   const [isAddListModalOpen, setIsAddListModalOpen] = useState<boolean>(false);
 
+  const updateFolders = async () => {
+    const data = await fetchFolders();
+    setFolders(data);
+  }
+
+  useEffect(() => {
+    updateFolders();
+  }, []);
+
+  const onAddFolder = async (title: string) => {
+    const folderId = await todoService.createFolder(title);
+    await updateFolders()
+  }
+
+  const onAddList = async (title: string, folderId: string | null) => {
+    const listId = await todoService.createList(title, folderId);
+    await updateFolders()
+  }
+
+  const onDeleteFolderOrList = async (item: TodoFolder | TodoList) => {
+    const isRemoved: boolean = item instanceof TodoFolder
+      ? await todoService.deleteFolder(item.id)
+      : await todoService.deleteList(item.id);
+
+    if (isRemoved)
+      updateFolders()
+  }
+
   const getIsFolderOpen = (folder: TodoFolder): boolean => {
-    return openFoldersIds.includes(folder.id);
+    return openFoldersIds.has(folder.id);
   }
 
   const navigateToFolder = (folder: TodoFolder) => {
