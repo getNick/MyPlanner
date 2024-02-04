@@ -4,6 +4,7 @@ import TodoFolder from "../entities/TodoFolder";
 import TodoList from "../entities/TodoList";
 import TodoService from "../services/TodoService";
 import TodoTask from "../entities/TodoTask";
+import { json } from "stream/consumers";
 
 export const TodoContext = React.createContext<TodoContextType | null>(null);
 
@@ -13,7 +14,31 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [openFoldersIds, setOpenFoldersIds] = useState<Set<string>>(new Set<string>());
   const [openListsIds, setOpenListsIds] = useState<Set<string>>(new Set<string>());
 
+  const updateOpenFoldersIdsFromLocalStorage = async () => {
+    const foldersStr = localStorage.getItem("openFoldersIds");
+    if (foldersStr !== null) {
+      try {
+        setOpenFoldersIds(new Set<string>(JSON.parse(foldersStr)));
+      } catch (error) {
+        setOpenFoldersIds(new Set<string>());
+      }
+    }
+  }
+
+  const updateOpenListIdsFromLocalStorage = async () => {
+    const listsStr = localStorage.getItem("openListsIds");
+    if (listsStr !== null) {
+      try {
+        setOpenListsIds(new Set<string>(JSON.parse(listsStr)));
+      } catch (error) {
+        setOpenListsIds(new Set<string>());
+      }
+    }
+  }
+
   const fetchFolders = async (): Promise<TodoFolder[] | undefined> => {
+    updateOpenFoldersIdsFromLocalStorage();
+
     const items = await todoService.getFolders();
     updateTitleCache(items);
     return items;
@@ -22,6 +47,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchFolder = async (folderId: string | undefined): Promise<TodoFolder | undefined> => {
     if (folderId === undefined)
       return undefined;
+    updateOpenListIdsFromLocalStorage();
 
     const data = await todoService.getFolder(folderId);
     return data;
@@ -68,6 +94,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newSet.add(folder.id);
     }
     setOpenFoldersIds(newSet);
+    localStorage.setItem("openFoldersIds", JSON.stringify(Array.from(newSet)));
   }
 
   const toggleIsListOpen = (list: TodoList) => {
@@ -78,6 +105,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newSet.add(list.id);
     }
     setOpenListsIds(newSet);
+    localStorage.setItem("openListsIds", JSON.stringify(Array.from(newSet)));
   }
 
   return (

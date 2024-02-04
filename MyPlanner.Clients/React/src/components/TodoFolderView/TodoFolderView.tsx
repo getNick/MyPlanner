@@ -19,10 +19,10 @@ const TodoFolderView: React.FC = () => {
   const navigate = useNavigate();
   const folderId = useLoaderData() as string;
   const [folder, setFolder] = useState<TodoFolder | undefined>();
-  const { todoService, openListsIds, getCachedTitle, toggleIsListOpen } = useTodoContext();
+  const { todoService, openListsIds, fetchFolder, getCachedTitle, toggleIsListOpen } = useTodoContext();
 
   const updateFolder = async () => {
-    const data = await todoService.getFolder(folderId);
+    const data = await fetchFolder(folderId);
     setFolder(data);
   }
 
