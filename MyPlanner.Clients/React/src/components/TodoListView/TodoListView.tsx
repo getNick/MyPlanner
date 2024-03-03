@@ -88,17 +88,20 @@ const TodoListView: React.FC = () => {
   const getTaskView = (task: TodoTask): React.ReactNode => {
     const isSelected: Boolean = false;
     const styleName: string = isSelected ? " item-selected" : "";
+    const completeTaskStyle: string = task.isComplete ? "line-through" : "";
     return (
       <li key={task.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
         <input type="checkbox" checked={task.isComplete} onChange={() => onToggleIsComplete(task)} className="ml-2 w-4 h-4 rounded" />
-        <span className="ml-1 flex-auto" onClick={() => navigateToTask(task)} >{task.title}</span>
+        <span className={`${completeTaskStyle} ml-1 flex-auto`} onClick={() => navigateToTask(task)} >{task.title}</span>
         {getTaskOptions(task)}
       </li>
     );
   }
 
-  const tasksView: React.ReactNode = list?.tasks.map((folder) => getTaskView(folder));
-
+  const doneTasks: TodoTask[] = list?.tasks.filter((task) => task.isComplete === true) ?? [];
+  const undoneTasks: TodoTask[] = list?.tasks.filter((task) => task.isComplete === false) ?? [];
+  const tasksView: React.ReactNode = undoneTasks.map((task) => getTaskView(task));
+  const doneTasksView: React.ReactNode = doneTasks.map((task) => getTaskView(task));
   return (
     <div className="m-1">
       <div className="flex h-10 items-center">
@@ -119,6 +122,12 @@ const TodoListView: React.FC = () => {
       <ul>
         {tasksView}
       </ul>
+
+      <h3>Completed</h3>
+      <ul>
+        {doneTasksView}
+      </ul>
+
     </div>
   );
 }
