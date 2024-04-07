@@ -73,7 +73,13 @@ export default class TodoService {
 
   private remapPage(folder: any): Page {
     const content = folder.content !== null ? new PageContent(folder.content.id, folder.content.type) : undefined;
-    return new Page(folder.id, folder.title, folder.includePages, content);
+    const pages: Page[] = [];
+    if (folder.includePages !== undefined && Array.isArray(folder.includePages)) {
+      folder.includePages.forEach((x: any) => {
+        pages.push(this.remapPage(x))
+      });
+    }
+    return new Page(folder.id, folder.title, pages, content);
   }
   private remapContent(content: any): TodoList | undefined {
     if (content.type === "TodoList")

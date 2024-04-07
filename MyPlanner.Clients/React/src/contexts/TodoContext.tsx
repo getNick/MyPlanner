@@ -111,9 +111,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateTitleCache = async (pages: Page[]) => {
     pages.forEach(page => {
       titleCache[page.id] = page.title;
-      page.pages.forEach(list => {
-        titleCache[list.id] = list.title;
-      })
+      updateTitleCache(page.pages)
     });
   }
 

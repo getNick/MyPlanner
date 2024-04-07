@@ -1,4 +1,5 @@
-﻿using System.Reflection.Metadata.Ecma335;
+﻿using System.Linq.Expressions;
+using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.DBContexts;
@@ -65,22 +66,33 @@ public class PageService : IPageService
         });
     }
 
+    public Page LoadSubPages(Page page)
+    {
+        var subPages = _unitOfWork.Pages.Get(x => x.ParentPage == page.Id).Include(x => x.Content).ToList();
+        page.IncludePages = subPages;
+        page.IncludePages.ForEach(x => LoadSubPages(x));
+        return page;
+    }
     public async Task<IReadOnlyList<Page>> GetAllAsync(string userId)
     {
-        return await Task.Run(() => _unitOfWork.Pages.Get(x => string.Equals(x.UserId, userId) && x.ParentPage == null)
-        .Include(x => x.Content)
-        .Include(x => x.IncludePages).ThenInclude(x => x.Content)
-        .ToArray());
+        return await Task.Run(() =>
+        {
+            var result = _unitOfWork.Pages.Get(x => string.Equals(x.UserId, userId) && x.ParentPage == null)
+            .Include(x => x.Content)
+            .ToArray()
+            .Select(LoadSubPages)
+            .ToArray();
+            return result;
+        });
     }
 
     public async Task<Page?> GetAsync(Guid id)
     {
-        return await Task.Run(
-            () => _unitOfWork.Pages
-            .Get(x => x.Id == id)
-            .Include(x => x.Content)
-            .Include(x => x.IncludePages).ThenInclude(x => x.Content)
-            .FirstOrDefaultAsync());
+        return await Task.Run(() =>
+        {
+            var page = _unitOfWork.Pages.GetById(id);
+            return page != null ? LoadSubPages(page) : null;
+        });
     }
     public async Task<PageContentEnum> GetPageContentTypeAsync(Guid id)
     {

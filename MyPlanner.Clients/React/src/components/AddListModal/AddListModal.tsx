@@ -77,7 +77,22 @@ const AddListModal: React.FC<AddListModalProps> = (props) => {
         setNewListTitle(e.target.value);
     }
 
-    const foldersList: FolderItem[] = [new FolderItem("None", "Root"), ...props.folders.map(x => new FolderItem(x.id, x.title))];
+    const pages: FolderItem[] = [];
+    const selectPages = (page: Page, prefix: string = "") => {
+        const title = prefix + page.title;
+        if (page.content === undefined) {
+            pages.push(new FolderItem(page.id, title));
+        }
+        page.pages.forEach(innerPage => {
+            selectPages(innerPage, `${title} \\`)
+        })
+    }
+
+    props.folders.forEach(page => {
+        selectPages(page)
+    });
+
+    const foldersList: FolderItem[] = [new FolderItem("None", "None"), ...pages];
     const pageTypes: string[] = ["Folder", "TodoList", "Note"];
 
     return (
