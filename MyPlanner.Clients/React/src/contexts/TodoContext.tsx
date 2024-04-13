@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { TodoContextType } from "./TodoContextType";
-import TodoFolder from "../entities/TodoFolder";
+import Page from "../entities/Pages/Page";
 import TodoList from "../entities/TodoList";
 import TodoService from "../services/TodoService";
 import TodoTask from "../entities/TodoTask";
-import { json } from "stream/consumers";
-
+import User from "../entities/User";
+import { googleLogout } from '@react-oauth/google';
+import { jwtDecode, JwtPayload } from 'jwt-decode'
 export const TodoContext = React.createContext<TodoContextType | null>(null);
 
 const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -13,6 +14,36 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [titleCache] = useState<{ [key: string]: string }>({});
   const [openFoldersIds, setOpenFoldersIds] = useState<Set<string>>(new Set<string>());
   const [openListsIds, setOpenListsIds] = useState<Set<string>>(new Set<string>());
+
+  const getUserInfo = (accessToken: string | null): User | undefined => {
+    if (accessToken === null || accessToken === "")
+      return undefined;
+    const decoded: JwtPayload | any = jwtDecode(accessToken);
+    const user: User = new User(decoded.sub);
+    user.firstName = decoded?.given_name;
+    user.lastName = decoded?.family_name;
+    user.email = decoded?.email;
+    user.picture = decoded?.picture;
+    return user;
+  }
+
+  const userAccessToken = localStorage.getItem("user_access_token");
+  const [user, setUser] = useState<User | undefined>(getUserInfo(userAccessToken));
+
+  const login = async (accessToken: string) => {
+    localStorage.setItem("user_access_token", accessToken);
+    setUser(getUserInfo(accessToken));
+  }
+
+  const logout = async () => {
+    googleLogout();
+    localStorage.setItem("user_access_token", "");
+    setUser(undefined);
+  }
+
+  const isLoggedIn = (): boolean => {
+    return user !== undefined;
+  }
 
   const updateOpenFoldersIdsFromLocalStorage = async () => {
     const foldersStr = localStorage.getItem("openFoldersIds");
@@ -36,20 +67,20 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const fetchFolders = async (): Promise<TodoFolder[] | undefined> => {
+  const fetchPages = async (): Promise<Page[] | undefined> => {
+    if (user === undefined)
+      return undefined;
     updateOpenFoldersIdsFromLocalStorage();
-
-    const items = await todoService.getFolders();
+    const items = await todoService.getPages(user.id);
     updateTitleCache(items);
     return items;
   }
 
-  const fetchFolder = async (folderId: string | undefined): Promise<TodoFolder | undefined> => {
-    if (folderId === undefined)
+  const fetchPage = async (pageId: string | undefined): Promise<Page | undefined> => {
+    if (pageId === undefined)
       return undefined;
     updateOpenListIdsFromLocalStorage();
-
-    const data = await todoService.getFolder(folderId);
+    const data = await todoService.getPage(pageId);
     return data;
   }
 
@@ -57,7 +88,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (listId === undefined)
       return undefined;
 
-    const data = await todoService.getList(listId);
+    const data = await todoService.getPageContent(listId);
     return data;
   }
 
@@ -77,16 +108,16 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return undefined;
   }
 
-  const updateTitleCache = async (folders: TodoFolder[]) => {
-    folders.forEach(folder => {
-      titleCache[folder.id] = folder.title;
-      folder.lists.forEach(list => {
+  const updateTitleCache = async (pages: Page[]) => {
+    pages.forEach(page => {
+      titleCache[page.id] = page.title;
+      page.pages.forEach(list => {
         titleCache[list.id] = list.title;
       })
     });
   }
 
-  const toggleIsFolderOpen = (folder: TodoFolder) => {
+  const toggleIsFolderOpen = (folder: Page) => {
     const newSet = new Set(openFoldersIds);
     if (newSet.has(folder.id)) {
       newSet.delete(folder.id);
@@ -111,7 +142,8 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <TodoContext.Provider value={{
       todoService,
-      fetchFolders, fetchFolder, fetchList, fetchTask,
+      login, logout, user, isLoggedIn,
+      fetchPages, fetchPage, fetchList, fetchTask,
       getCachedTitle,
       openFoldersIds, toggleIsFolderOpen,
       openListsIds, toggleIsListOpen,

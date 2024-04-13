@@ -1,45 +1,45 @@
 import React from 'react';
 import './App.css';
-import FoldersList from '../FoldersList/FoldersList';
-import TodoListView from '../TodoListView/TodoListView';
-import TodoTaskView from '../TodoTaskView/TodoTaskView';
-import TodoFolderView from '../TodoFolderView/TodoFolderView';
-import { RouterProvider, createBrowserRouter, defer, } from 'react-router-dom';
+import TodoTaskView from '../../pages/TodoTaskView/TodoTaskView';
+import { RouterProvider, createBrowserRouter, defer, Navigate, } from 'react-router-dom';
 import { useTodoContext } from '../../contexts/TodoContext';
+import SignIn from '../../pages/SignIn/SignIn';
+import Home from '../../pages/Home/Home';
+import TodoListPage from '../../pages/TodoListPage/TodoListPage';
 
 const App: React.FC = () => {
+  const todoContext = useTodoContext();
+
+  const privatePage = (page: any) => {
+    if (todoContext.isLoggedIn() === false) {
+      console.log("navigate to login")
+      return <Navigate to={"login"} />
+    }
+    return page;
+  }
+
   const router = createBrowserRouter([
     {
-      path: "/",
-      element: <FoldersList />,
+      path: "login",
+      element: <SignIn />
     },
     {
-      path: "folder/:folderId",
-      loader: async ({ params }) => {
-        return params.folderId;
-      },
-      element: <TodoFolderView />
+      path: "/",
+      element: privatePage(<Home />),
     },
     {
       path: "list/:listId",
       loader: async ({ params }) => {
         return params.listId;
       },
-      element: <TodoListView />
-    },
-    {
-      path: "folder/:folderId/task/:taskId",
-      loader: async ({ params }) => {
-        return params.taskId;
-      },
-      element: <TodoTaskView />
+      element: privatePage(<TodoListPage />)
     },
     {
       path: "list/:listId/task/:taskId",
       loader: async ({ params }) => {
         return params.taskId;
       },
-      element: <TodoTaskView />
+      element: privatePage(<TodoTaskView />)
     },
   ]);
 

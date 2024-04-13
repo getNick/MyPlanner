@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import TodoTask from "../../entities/TodoTask";
 import UpdateTask from "../../entities/UpdateTask";
-import TextInput from "../TextInput/TextInput";
+import TextInput from "../../components/TextInput/TextInput";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { useTodoContext } from "../../contexts/TodoContext";

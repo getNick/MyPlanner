@@ -1,26 +1,25 @@
 import React, { useEffect, useState } from "react";
 import TodoList from "../../entities/TodoList";
-import './TodoListView.css'
+import './TodoListPage.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBars, faEllipsis, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import TodoTask from "../../entities/TodoTask";
-import TextInput from "../TextInput/TextInput";
 import { Menu } from "@headlessui/react";
 import UpdateTask from "../../entities/UpdateTask";
-import UpdateList from "../../entities/UpdateList";
 import { useTodoContext } from "../../contexts/TodoContext";
 import { useLoaderData } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
+import TextInput from "../../components/TextInput/TextInput";
 
-const TodoListView: React.FC = () => {
-  const listId = useLoaderData() as string;
+const TodoListPage: React.FC = () => {
+  const pageId = useLoaderData() as string;
   const navigate = useNavigate();
   const [list, setList] = useState<TodoList | undefined>();
 
   const { todoService, getCachedTitle } = useTodoContext();
 
   const updateList = async () => {
-    const data = await todoService.getList(listId);
+    const data = await todoService.getPageContent(pageId);
     setList(data);
   }
 
@@ -28,20 +27,21 @@ const TodoListView: React.FC = () => {
     updateList();
   }, []);
 
-  let title = getCachedTitle(listId);
-  if (title === undefined)
-    title = list?.title;
+  let title = getCachedTitle(pageId);
 
   const onNewTaskSubmit = async (newTaskTitle: string) => {
-    await todoService.createTask(newTaskTitle, listId);
+    if (list === undefined)
+      return;
+
+    await todoService.createTask(newTaskTitle, list.id);
     updateList();
   }
 
   const onTitleChanged = async (newTitle: string) => {
-    let changeTitleChange: UpdateList = new UpdateList(listId);
-    changeTitleChange.title = newTitle;
-    await todoService.updateList(changeTitleChange);
-    updateList();
+    // let changeTitleChange: UpdateList = new UpdateList(pageId);
+    // changeTitleChange.title = newTitle;
+    // await todoService.updateList(changeTitleChange);
+    // updateList();
   }
 
   const onToggleIsComplete = async (task: TodoTask) => {
@@ -98,10 +98,37 @@ const TodoListView: React.FC = () => {
     );
   }
 
-  const doneTasks: TodoTask[] = list?.tasks.filter((task) => task.isComplete === true) ?? [];
-  const undoneTasks: TodoTask[] = list?.tasks.filter((task) => task.isComplete === false) ?? [];
-  const tasksView: React.ReactNode = undoneTasks.map((task) => getTaskView(task));
-  const doneTasksView: React.ReactNode = doneTasks.map((task) => getTaskView(task));
+  const getUndoneTasksView = (tasks: TodoTask[]): React.ReactNode => {
+    const undoneTasks: TodoTask[] = tasks.filter((task) => task.isComplete === false) ?? [];
+    if (undoneTasks.length === 0)
+      return undefined;
+
+    const tasksView: React.ReactNode = undoneTasks.map((task) => getTaskView(task));
+    return (
+      <ul>
+        {tasksView}
+      </ul>
+    )
+  }
+
+  const getDoneTasksView = (tasks: TodoTask[]): React.ReactNode => {
+    const doneTasks: TodoTask[] = tasks.filter((task) => task.isComplete === true) ?? [];
+    if (doneTasks.length === 0)
+      return undefined;
+
+    const tasksView: React.ReactNode = doneTasks.map((task) => getTaskView(task));
+    return (
+      <div>
+        <h3>Completed</h3>
+        <ul>
+          {tasksView}
+        </ul>
+      </div>
+    )
+  }
+
+  const undoneTaskView = list !== undefined ? getUndoneTasksView(list.tasks) : undefined;
+  const doneTaskView = list !== undefined ? getDoneTasksView(list.tasks) : undefined;
   return (
     <div className="m-1">
       <div className="flex h-10 items-center">
@@ -119,17 +146,11 @@ const TodoListView: React.FC = () => {
         placeholderText={`Add task to '${title}', press Enter to save`}
         clearTextOnSubmit={true}
         onSubmit={onNewTaskSubmit} />
-      <ul>
-        {tasksView}
-      </ul>
 
-      <h3>Completed</h3>
-      <ul>
-        {doneTasksView}
-      </ul>
-
+      {undoneTaskView}
+      {doneTaskView}
     </div>
   );
 }
 
-export default TodoListView;
+export default TodoListPage;
