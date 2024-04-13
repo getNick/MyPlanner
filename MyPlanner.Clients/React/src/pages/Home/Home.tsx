@@ -11,12 +11,16 @@ import { useLoaderData, useNavigate } from 'react-router-dom';
 import AddListModal from '../../components/AddListModal/AddListModal';
 import { PageType } from '../../entities/Pages/PageType';
 import CreatePage from '../../entities/Pages/CreatePage';
+import SharePageModal from '../../components/SharePageModal/SharePageModal';
+import SharePage from '../../entities/Pages/SharePage';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout, fetchPages, todoService, openFoldersIds, toggleIsFolderOpen } = useTodoContext();
   const [pages, setPages] = useState<Page[] | undefined>();
   const [isAddListModalOpen, setIsAddListModalOpen] = useState<boolean>(false);
+  const [isSharePageModalOpen, setIsSharePageModalOpen] = useState<boolean>(false);
+  const [sharePage, setSharePage] = useState<Page | undefined>();
 
   const updateFolders = async () => {
     const data = await fetchPages();
@@ -34,6 +38,16 @@ const Home: React.FC = () => {
     const model = new CreatePage(title, user?.id, pageType, parentPageId);
     const listId = await todoService.createPage(model);
     await updateFolders()
+  }
+
+  const openSharePage = async (page: Page) => {
+    setSharePage(page);
+    setIsSharePageModalOpen(true);
+  }
+
+  const onSharePage = async (pageId: string, userEmail: string) => {
+    todoService.sharePage(new SharePage(pageId, userEmail));
+    setIsSharePageModalOpen(false);
   }
 
   const onDeleteFolderOrList = async (page: Page) => {
@@ -68,6 +82,13 @@ const Home: React.FC = () => {
           <FontAwesomeIcon icon={faEllipsis} />
         </Menu.Button>
         <Menu.Items className="absolute z-20 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
+          <Menu.Item>
+            {({ active }) => (
+              <button className={`item ${active ? 'item-selected' : ''}`} onClick={() => openSharePage(page)}>
+                <span className='px-2'>Share</span>
+              </button>
+            )}
+          </Menu.Item>
           <Menu.Item>
             {({ active }) => (
               <button className={`item ${active ? 'item-selected' : ''}`} onClick={() => onDeleteFolderOrList(page)}>
@@ -172,6 +193,11 @@ const Home: React.FC = () => {
       <ul>
         {items}
       </ul>
+
+      <SharePageModal isOpen={isSharePageModalOpen}
+        Page={sharePage}
+        onShare={onSharePage}
+        onClose={() => setIsSharePageModalOpen(false)} />
     </div>)
 }
 

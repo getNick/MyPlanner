@@ -1,4 +1,4 @@
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Common;
 using MyPlanner.Data.Entities.Notes;
@@ -38,6 +38,11 @@ public class ApplicationDbContext : DbContext
         builder.Entity<Page>()
             .HasOne(x => x.Content).WithOne()
             .HasForeignKey<PageContent>(x => x.PageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Page>()
+            .HasMany(x => x.Sharing).WithOne()
+            .HasForeignKey(x => x.PageId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // page content

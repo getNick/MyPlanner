@@ -12,4 +12,5 @@ public interface IPageService
     Task<PageContent?> GetPageContentAsync(Guid id);
     Task<bool> UpdateAsync(UpdatePageModel model);
     Task<bool> DeleteAsync(Guid id);
+    Task<bool> Share(SharePageModel model);
 }

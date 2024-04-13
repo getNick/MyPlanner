@@ -78,4 +78,15 @@ public class PagesController : ControllerBase
             return NotFound();
         return NoContent();
     }
+
+    [HttpPost("share")]
+    public async Task<IActionResult> SharePage(SharePageModel model)
+    {
+        if (string.IsNullOrEmpty(model.UserId))
+        {
+            return BadRequest();
+        }
+        bool isCreated = await _pageService.Share(model);
+        return CreatedAtAction(nameof(SharePage), model);
+    }
 }

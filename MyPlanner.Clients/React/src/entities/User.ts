@@ -2,9 +2,10 @@ export default class User {
     id: string;
     firstName?: string;
     lastName?: string;
-    email?: string;
+    email: string;
     picture?: string;
-    constructor(id: string) {
-        this.id = id;
+    constructor(email: string) {
+        this.id = email;
+        this.email = email;
     }
 }

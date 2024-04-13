@@ -12,4 +12,6 @@ public class Page : EntityBase
 
     // Content 
     public PageContent? Content { get; set; }
+    //Sharing
+    public List<PageSharing> Sharing { get; set; } = new List<PageSharing>();
 }

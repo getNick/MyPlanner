@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
@@ -77,7 +77,7 @@ public class PageService : IPageService
     {
         return await Task.Run(() =>
         {
-            var result = _unitOfWork.Pages.Get(x => string.Equals(x.UserId, userId) && x.ParentPage == null)
+            var result = _unitOfWork.Pages.Get(x => (string.Equals(x.UserId, userId) && x.ParentPage == null) || x.Sharing.Any(shar => shar.SharedWithUserId == userId))
             .Include(x => x.Content)
             .ToArray()
             .Select(LoadSubPages)
@@ -137,6 +137,29 @@ public class PageService : IPageService
             bool result = _unitOfWork.Pages.Update(page);
             _unitOfWork.Save();
             return result;
+        });
+    }
+
+    public async Task<bool> Share(SharePageModel model)
+    {
+        return await Task.Run(() =>
+        {
+            if (model.PageId == Guid.Empty)
+                return false;
+
+            if (_unitOfWork.Pages.GetById(model.PageId) is not Page page)
+                return false;
+
+            var sharePage = new PageSharing()
+            {
+                Id = Guid.NewGuid(),
+                PageId = model.PageId,
+                SharedWithUserId = model.UserId,
+            };
+
+            _unitOfWork.PageSharing.Create(sharePage);
+            _unitOfWork.Save();
+            return true;
         });
     }
 }

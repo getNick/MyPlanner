@@ -19,7 +19,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (accessToken === null || accessToken === "")
       return undefined;
     const decoded: JwtPayload | any = jwtDecode(accessToken);
-    const user: User = new User(decoded.sub);
+    const user: User = new User(decoded?.email);
     user.firstName = decoded?.given_name;
     user.lastName = decoded?.family_name;
     user.email = decoded?.email;

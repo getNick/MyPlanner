@@ -5,6 +5,7 @@ import UpdatePage from "../entities/Pages/UpdatePage";
 import UpdateTask from "../entities/UpdateTask";
 import CreatePage from "../entities/Pages/CreatePage";
 import PageContent from "../entities/Pages/PageContent";
+import SharePage from "../entities/Pages/SharePage";
 
 export default class TodoService {
 
@@ -45,6 +46,11 @@ export default class TodoService {
 
   public async deletePage(id: string): Promise<boolean> {
     const res = await this.sendDeleteRequest(`pages/${id}`);
+    return res;
+  }
+
+  public async sharePage(sharePage: SharePage): Promise<boolean> {
+    const res = await this.sendPostRequest(`pages/share`, sharePage);
     return res;
   }
 
