@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MyPlanner.Data.Entities.Common;
+using MyPlanner.Data.Entities.Notes;
 using MyPlanner.Data.Entities.Todo;
 using MyPlanner.Data.Repositories;
 
@@ -9,14 +11,20 @@ public class UnitOfWork : IUnitOfWork
     public UnitOfWork(DbContext dbContext)
     {
         _dbContext = dbContext;
-        Folders = new Repository<TodoFolder>(_dbContext);
+        Pages = new Repository<Page>(_dbContext);
+        PageContent = new Repository<PageContent>(_dbContext);
+        PageSharing = new Repository<PageSharing>(_dbContext);
         TaskLists = new Repository<TodoList>(_dbContext);
         Tasks = new Repository<TodoTask>(_dbContext);
+        Notes = new Repository<Note>(_dbContext);
     }
 
-    public IRepository<TodoFolder> Folders { get; }
+    public IRepository<Page> Pages { get; }
+    public IRepository<PageContent> PageContent { get; }
+    public IRepository<PageSharing> PageSharing { get; }
     public IRepository<TodoList> TaskLists { get; }
     public IRepository<TodoTask> Tasks { get; }
+    public IRepository<Note> Notes { get; }
     public void Save()
     {
         _dbContext.SaveChanges();

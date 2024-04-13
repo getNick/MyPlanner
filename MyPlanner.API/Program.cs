@@ -34,7 +34,8 @@ app.MapControllers();
 app.Run();
 
 
-void ConfigureServices(IServiceCollection services){
+void ConfigureServices(IServiceCollection services)
+{
     var connectionString = ApplicationDbContext.GetConnectionString();
 
     services.AddDbContext<DbContext, ApplicationDbContext>(
@@ -48,7 +49,6 @@ void ConfigureServices(IServiceCollection services){
         );
 
     services.AddScoped<IUnitOfWork, UnitOfWork>();
-    services.AddTransient<ITodoFolderService, TodoFolderService>();
-    services.AddTransient<ITodoListService, TodoListService>();
+    services.AddTransient<IPageService, PageService>();
     services.AddTransient<ITodoTaskService, TodoTaskService>();
 }

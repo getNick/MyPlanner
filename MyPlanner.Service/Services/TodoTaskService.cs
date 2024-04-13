@@ -29,7 +29,7 @@ public class TodoTaskService : ITodoTaskService
         }));
     }
 
-     public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id)
     {
         return await Task.Run(() =>
         {
@@ -41,7 +41,7 @@ public class TodoTaskService : ITodoTaskService
 
     public async Task<IReadOnlyList<TodoTask>> GetAllAsync(Guid listId)
     {
-         return await Task.Run(() => _unitOfWork.Tasks.Get().ToArray());
+        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.ListId == listId).ToArray());
     }
 
     public async Task<TodoTask?> GetAsync(Guid id)
@@ -53,25 +53,29 @@ public class TodoTaskService : ITodoTaskService
     {
         return await Task.Run(() =>
         {
-            if(model.Id == Guid.Empty)
+            if (model.Id == Guid.Empty)
                 return false;
 
-            if(_unitOfWork.Tasks.GetById(model.Id) is not TodoTask task)
+            if (_unitOfWork.Tasks.GetById(model.Id) is not TodoTask task)
                 return false;
 
-            if(model.Title is not null){
+            if (model.Title is not null)
+            {
                 task.Title = model.Title;
             }
-            if(model.Description is not null){
+            if (model.Description is not null)
+            {
                 task.Description = model.Description;
             }
-            if(model.IsComplete is not null){
+            if (model.IsComplete is not null)
+            {
                 task.IsComplete = model.IsComplete.Value;
             }
-            if(model.ListId is not null){
+            if (model.ListId is not null)
+            {
                 task.ListId = model.ListId.Value;
             }
-            
+
             bool result = _unitOfWork.Tasks.Update(task);
             _unitOfWork.Save();
             return result;

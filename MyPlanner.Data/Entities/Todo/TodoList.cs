@@ -1,8 +1,12 @@
-﻿namespace MyPlanner.Data.Entities.Todo;
+﻿using MyPlanner.Data.Entities.Common;
 
-public class TodoList : EntityBase
+namespace MyPlanner.Data.Entities.Todo;
+
+public class TodoList : PageContent
 {
-    public string Title { get; set; } = string.Empty;
+    public TodoList(Guid pageId) : base(pageId)
+    {
+        Type = PageContentEnum.TodoList;
+    }
     public List<TodoTask> Tasks { get; set; } = new List<TodoTask>();
-    public Guid? FolderId { get; set; }
 }
