@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { TodoContextType } from "./TodoContextType";
 import Page from "../entities/Pages/Page";
-import TodoList from "../entities/TodoList";
+import TodoList from "../entities/TodoList/TodoList";
 import TodoService from "../services/TodoService";
-import TodoTask from "../entities/TodoTask";
 import User from "../entities/User";
 import { googleLogout } from '@react-oauth/google';
 import { jwtDecode, JwtPayload } from 'jwt-decode'
+
 export const TodoContext = React.createContext<TodoContextType | null>(null);
 
 const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -84,21 +84,6 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data;
   }
 
-  const fetchList = async (listId: string | undefined): Promise<TodoList | undefined> => {
-    if (listId === undefined)
-      return undefined;
-
-    const data = await todoService.getPageContent(listId);
-    return data;
-  }
-
-  const fetchTask = async (taskId: string | undefined): Promise<TodoTask | undefined> => {
-    if (taskId === undefined)
-      return undefined;
-    const data = await todoService.getTask(taskId);
-    return data;
-  }
-
   const getCachedTitle = (id: string | undefined): string | undefined => {
     if (id === undefined)
       return undefined;
@@ -141,7 +126,7 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <TodoContext.Provider value={{
       todoService,
       login, logout, user, isLoggedIn,
-      fetchPages, fetchPage, fetchList, fetchTask,
+      fetchPages, fetchPage,
       getCachedTitle,
       openFoldersIds, toggleIsFolderOpen,
       openListsIds, toggleIsListOpen,

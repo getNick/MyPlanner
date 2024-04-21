@@ -50,4 +50,5 @@ void ConfigureServices(IServiceCollection services)
     services.AddScoped<IUnitOfWork, UnitOfWork>();
     services.AddTransient<IPageService, PageService>();
     services.AddTransient<ITodoTaskService, TodoTaskService>();
+    services.AddTransient<INoteService, NoteService>();
 }

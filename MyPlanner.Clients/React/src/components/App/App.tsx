@@ -6,6 +6,7 @@ import { useTodoContext } from '../../contexts/TodoContext';
 import SignIn from '../../pages/SignIn/SignIn';
 import Home from '../../pages/Home/Home';
 import TodoListPage from '../../pages/TodoListPage/TodoListPage';
+import NotePage from '../../pages/NotePage/NotePage';
 
 const App: React.FC = () => {
   const todoContext = useTodoContext();
@@ -40,6 +41,13 @@ const App: React.FC = () => {
         return params.taskId;
       },
       element: privatePage(<TodoTaskView />)
+    },
+    {
+      path: "note/:noteId",
+      loader: async ({ params }) => {
+        return params.noteId;
+      },
+      element: privatePage(<NotePage />)
     },
   ]);
 

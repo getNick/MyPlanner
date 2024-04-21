@@ -1,11 +1,13 @@
 import Page from "../entities/Pages/Page";
-import TodoList from "../entities/TodoList";
-import TodoTask from "../entities/TodoTask";
+import TodoList from "../entities/TodoList/TodoList";
+import TodoTask from "../entities/TodoList/TodoTask";
 import UpdatePage from "../entities/Pages/UpdatePage";
-import UpdateTask from "../entities/UpdateTask";
+import UpdateTask from "../entities/TodoList/UpdateTask";
 import CreatePage from "../entities/Pages/CreatePage";
 import PageContent from "../entities/Pages/PageContent";
 import SharePage from "../entities/Pages/SharePage";
+import Note from "../entities/Note/Note";
+import UpdateNote from "../entities/Note/UpdateNote";
 
 export default class TodoService {
 
@@ -27,7 +29,7 @@ export default class TodoService {
     return undefined;
   }
 
-  public async getPageContent(id: string): Promise<TodoList | undefined> {
+  public async getPageContent(id: string): Promise<TodoList | Note | undefined> {
     const res = await this.getResource(`pages/${id}/content`);
     if (res !== undefined)
       return this.remapContent(res)
@@ -54,6 +56,12 @@ export default class TodoService {
     return res;
   }
 
+  //TodoList
+  public async getTodoList(id: string): Promise<TodoList | undefined> {
+    const content = this.getPageContent(id);
+    return content as unknown as TodoList;
+  }
+
   // Tasks
   public async getTask(id: string): Promise<TodoTask | undefined> {
     const res = await this.getResource(`todo/tasks/${id}`);
@@ -77,6 +85,18 @@ export default class TodoService {
     return res;
   }
 
+  // Note
+  public async getNote(id: string): Promise<Note | undefined> {
+    const content = this.getPageContent(id);
+    return content as unknown as Note;
+  }
+
+  public async updateNote(updateNote: UpdateNote): Promise<boolean> {
+    const res = await this.sendPutRequest("note", updateNote);
+    return res;
+  }
+
+
   private remapPage(folder: any): Page {
     const content = folder.content !== null ? new PageContent(folder.content.id, folder.content.type) : undefined;
     const pages: Page[] = [];
@@ -87,9 +107,11 @@ export default class TodoService {
     }
     return new Page(folder.id, folder.title, pages, content);
   }
-  private remapContent(content: any): TodoList | undefined {
+  private remapContent(content: any): TodoList | Note | undefined {
     if (content.type === "TodoList")
       return new TodoList(content.id, content.tasks);
+    if (content.type === "Note")
+      return new Note(content.id, content.content);
     return undefined;
   }
   private remapTask(task: any): TodoTask {

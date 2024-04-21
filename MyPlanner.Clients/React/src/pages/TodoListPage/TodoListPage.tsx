@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import TodoList from "../../entities/TodoList";
+import TodoList from "../../entities/TodoList/TodoList";
 import './TodoListPage.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBars, faEllipsis, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
-import TodoTask from "../../entities/TodoTask";
+import TodoTask from "../../entities/TodoList/TodoTask";
 import { Menu } from "@headlessui/react";
-import UpdateTask from "../../entities/UpdateTask";
+import UpdateTask from "../../entities/TodoList/UpdateTask";
 import { useTodoContext } from "../../contexts/TodoContext";
 import { useLoaderData } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,7 @@ const TodoListPage: React.FC = () => {
   const { todoService, getCachedTitle } = useTodoContext();
 
   const updateList = async () => {
-    const data = await todoService.getPageContent(pageId);
+    const data = await todoService.getTodoList(pageId);
     setList(data);
   }
 

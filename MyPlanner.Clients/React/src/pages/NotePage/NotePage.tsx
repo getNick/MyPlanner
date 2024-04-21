@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import TodoTask from "../../entities/TodoList/TodoTask";
-import UpdateTask from "../../entities/TodoList/UpdateTask";
 import TextInput from "../../components/TextInput/TextInput";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
@@ -16,26 +14,32 @@ import Checklist from '@editorjs/checklist'
 import Embed from '@editorjs/embed';
 // @ts-ignore
 import Header from 'editorjs-header-with-alignment';
+import UpdatePage from "../../entities/Pages/UpdatePage";
+import UpdateNote from "../../entities/Note/UpdateNote";
+import Note from "../../entities/Note/Note";
 
 
-const TodoTaskView: React.FC = () => {
-    const taskId = useLoaderData() as string;
+const NotePage: React.FC = () => {
+    const pageId = useLoaderData() as string;
     const navigate = useNavigate();
-    const { todoService } = useTodoContext();
-    const [task, setTask] = useState<TodoTask | undefined>();
+    const { todoService, getCachedTitle } = useTodoContext();
+    const [title, setTitle] = useState<string | undefined>();
+    const [note, setNote] = useState<Note | undefined>();
+
     const editorInstanceRef = useRef<EditorJS | null>(null);
 
-    const updateTask = async () => {
-        const data = await todoService.getTask(taskId);
-        setTask(data);
-        if (data?.description !== undefined && data?.description !== "") {
-            editorInstanceRef.current?.render(JSON.parse(data?.description))
+    const fetchContent = async () => {
+        setTitle(getCachedTitle(pageId));
+        const note = await todoService.getNote(pageId);
+        setNote(note);
+        if (note?.content !== undefined && note?.content !== "") {
+            editorInstanceRef.current?.render(JSON.parse(note?.content))
         }
     }
 
     useEffect(() => {
         initEditor();
-        updateTask();
+        fetchContent();
     }, []);
 
     const initEditor = () => {
@@ -63,15 +67,17 @@ const TodoTaskView: React.FC = () => {
     }
 
     const onTitleChanged = async (newTitle: string) => {
-        let changeTitleChange: UpdateTask = new UpdateTask(taskId);
+        let changeTitleChange: UpdatePage = new UpdatePage(pageId);
         changeTitleChange.title = newTitle;
-        await todoService.updateTask(changeTitleChange);
+        await todoService.updateFolder(changeTitleChange);
     }
-    const onDescriptionChanged = async () => {
+    const onContentChanged = async () => {
+        if (note?.id === undefined)
+            return;
         const descriptionData: OutputData | undefined = await editorInstanceRef.current?.save();
-        let changeDescriptionChange: UpdateTask = new UpdateTask(taskId);
-        changeDescriptionChange.description = JSON.stringify(descriptionData);;
-        await todoService.updateTask(changeDescriptionChange);
+        let updateNote: UpdateNote = new UpdateNote(note?.id);
+        updateNote.content = JSON.stringify(descriptionData);;
+        await todoService.updateNote(updateNote);
     }
 
     const navigateBack = () => {
@@ -88,12 +94,12 @@ const TodoTaskView: React.FC = () => {
                 <TextInput styleName="w-full h-10 p-1 font-bold text-xl"
                     onSubmit={onTitleChanged}
                     placeholderText="Title"
-                    value={task?.title} />
+                    value={title} />
             </div>
 
-            <div id="editorjs" onBlur={onDescriptionChanged}></div>
+            <div id="editorjs" onBlur={onContentChanged}></div>
         </div>
     )
 }
 
-export default TodoTaskView;
+export default NotePage;

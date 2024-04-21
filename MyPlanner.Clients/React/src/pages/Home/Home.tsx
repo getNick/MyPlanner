@@ -1,10 +1,10 @@
 import './Home.css'
 import React, { FC, useEffect, useState } from 'react';
 import Page from '../../entities/Pages/Page';
-import TodoList from '../../entities/TodoList';
+import TodoList from '../../entities/TodoList/TodoList';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faAngleRight, faAngleDown, faEllipsis, faBars } from "@fortawesome/free-solid-svg-icons";
-import { faFolder, faFolderOpen, faRectangleList } from "@fortawesome/free-regular-svg-icons";
+import { faPlus, faAngleRight, faAngleDown, faEllipsis, faBars, IconDefinition } from "@fortawesome/free-solid-svg-icons";
+import { faFolder, faFolderOpen, faRectangleList, faPenToSquare } from "@fortawesome/free-regular-svg-icons";
 import { Menu } from '@headlessui/react';
 import { useTodoContext } from '../../contexts/TodoContext';
 import { useLoaderData, useNavigate } from 'react-router-dom';
@@ -60,12 +60,14 @@ const Home: React.FC = () => {
     return openFoldersIds.has(folder.id);
   }
 
-  const navigateToFolder = (page: Page) => {
+  const navigateToPage = (page: Page) => {
     if (page.content === undefined || page.content === null)
       return;
 
     if (page.content.type === 'TodoList')
       navigate(`list/${page.id}`)
+    else if (page.content.type === 'Note')
+      navigate(`note/${page.id}`)
   }
 
   if (pages === undefined) {
@@ -120,7 +122,7 @@ const Home: React.FC = () => {
               <button className={`h-8 w-8 ${unfoldIconVisibility}`} onClick={(e) => toggleIsFolderOpen(page)}>
                 <FontAwesomeIcon icon={isOpen ? faAngleDown : faAngleRight} />
               </button>
-              <div className='flex-auto' onClick={(e) => navigateToFolder(page)}>
+              <div className='flex-auto' onClick={(e) => navigateToPage(page)}>
                 <FontAwesomeIcon icon={isOpen ? faFolderOpen : faFolder} />
                 <span className="ml-1">{page.title}</span>
               </div>
@@ -135,17 +137,24 @@ const Home: React.FC = () => {
     );
   }
 
-  const getListView = (page: Page): React.ReactNode => {
+  const getContentPageView = (page: Page): React.ReactNode => {
+    if (page.content === undefined)
+      return;
     const isSelected: Boolean = false;
     const styleName: string = isSelected ? " item-selected" : "";
-
+    const pageTypeMap: Record<PageType, IconDefinition> = {
+      'Note': faPenToSquare,
+      'TodoList': faRectangleList,
+      'Folder': faFolder,
+    };
+    const icon: IconDefinition = pageTypeMap[page.content?.type];
     return (
       <li key={page.id}>
         <div className='flex flex-col w-full'>
           <div className={`item ${styleName} flex w-full`}>
             <div className='flex items-center flex-auto'>
-              <div className='ml-8 flex-auto' onClick={(e) => navigateToFolder(page)}>
-                <FontAwesomeIcon icon={faRectangleList} />
+              <div className='ml-8 flex-auto' onClick={(e) => navigateToPage(page)}>
+                <FontAwesomeIcon icon={icon} />
                 <span className="ml-1">{page.title}</span>
               </div>
             </div>
@@ -160,8 +169,8 @@ const Home: React.FC = () => {
     if (page.content === undefined || page.content === null) {
       return getFolderView(page);
     }
-    if (page.content.type === 'TodoList') {
-      return getListView(page);
+    else {
+      return getContentPageView(page);
     }
   }
 
