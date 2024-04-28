@@ -27,6 +27,7 @@
     "@types/validator": "^13.11.9",
     "editorjs-header-with-alignment": "^1.0.1",
     "editorjs-text-alignment-blocktune": "^1.0.3",
+    "editorjs-youtube-embed": "^1.0.3",
     "jwt-decode": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

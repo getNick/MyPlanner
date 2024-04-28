@@ -11,9 +11,10 @@ import List from "@editorjs/list";
 // @ts-ignore
 import Checklist from '@editorjs/checklist'
 // @ts-ignore
-import Embed from '@editorjs/embed';
+import YoutubeEmbed from 'editorjs-youtube-embed';
 // @ts-ignore
 import Header from 'editorjs-header-with-alignment';
+
 import UpdatePage from "../../entities/Pages/UpdatePage";
 import UpdateNote from "../../entities/Note/UpdateNote";
 import Note from "../../entities/Note/Note";
@@ -59,7 +60,7 @@ const NotePage: React.FC = () => {
                     },
                     List,
                     Checklist,
-                    Embed,
+                    youtubeEmbed: YoutubeEmbed,
                 }
             })
             editorInstanceRef.current = editor;

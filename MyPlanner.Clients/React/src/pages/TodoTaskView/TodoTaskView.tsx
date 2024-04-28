@@ -13,7 +13,7 @@ import List from "@editorjs/list";
 // @ts-ignore
 import Checklist from '@editorjs/checklist'
 // @ts-ignore
-import Embed from '@editorjs/embed';
+import YoutubeEmbed from 'editorjs-youtube-embed';
 // @ts-ignore
 import Header from 'editorjs-header-with-alignment';
 
@@ -55,7 +55,7 @@ const TodoTaskView: React.FC = () => {
                     },
                     List,
                     Checklist,
-                    Embed,
+                    youtubeEmbed: YoutubeEmbed,
                 }
             })
             editorInstanceRef.current = editor;
