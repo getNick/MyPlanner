@@ -12,6 +12,7 @@ public interface IUnitOfWork : IDisposable
     IRepository<PageSharing> PageSharing { get; }
     IRepository<TodoList> TaskLists { get; }
     IRepository<TodoTask> Tasks { get; }
+    IRepository<TodoTaskSession> TaskSessions { get; }
     IRepository<Note> Notes { get; }
     void Save();
 }

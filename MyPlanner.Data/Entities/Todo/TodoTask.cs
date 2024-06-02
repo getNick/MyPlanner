@@ -6,5 +6,6 @@ public class TodoTask : EntityBase
     public string Description { get; set; } = string.Empty;
     public bool IsComplete { get; set; }
     public Guid ListId { get; set; }
+    public List<TodoTaskSession> Sessions { get; set; } = new List<TodoTaskSession>();
 }
 

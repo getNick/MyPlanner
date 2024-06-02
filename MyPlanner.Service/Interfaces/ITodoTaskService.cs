@@ -9,4 +9,12 @@ public interface ITodoTaskService
     Task<TodoTask?> GetAsync(Guid id);
     Task<bool> UpdateAsync(UpdateTaskModel model);
     Task<bool> DeleteAsync(Guid id);
+
+    //sessions
+    Task<Guid> CreateSessionAsync(CreateSessionModel model);
+    Task<bool> StartSessionAsync(Guid taskId, DateTime timeStamp);
+    Task<bool> StopSessionAsync(Guid taskId, DateTime timeStamp);
+    Task<IReadOnlyList<TodoTask>> GetAllSessionsAsync(Guid taskId);
+    Task<bool> UpdateSessionAsync(UpdateSessionModel model);
+    Task<bool> DeleteSessionAsync(Guid id);
 }

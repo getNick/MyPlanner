@@ -13,6 +13,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PageSharing> PageSharing { get; set; }
     public DbSet<TodoList> TodoLists { get; set; }
     public DbSet<TodoTask> TodoTasks { get; set; }
+    public DbSet<TodoTaskSession> TodoTasksSessions { get; set; }
     public DbSet<Note> Notes { get; set; }
 
     public ApplicationDbContext(DbContextOptions options) : base(options)
@@ -57,6 +58,11 @@ public class ApplicationDbContext : DbContext
         builder.Entity<TodoTask>()
             .HasOne<TodoList>()
             .WithMany(x => x.Tasks).HasForeignKey(x => x.ListId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<TodoTaskSession>()
+            .HasOne<TodoTask>()
+            .WithMany(x => x.Sessions).HasForeignKey(x => x.TodoTaskId)
             .OnDelete(DeleteBehavior.Cascade);
 
         base.OnModelCreating(builder);

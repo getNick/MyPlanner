@@ -16,6 +16,7 @@ public class UnitOfWork : IUnitOfWork
         PageSharing = new Repository<PageSharing>(_dbContext);
         TaskLists = new Repository<TodoList>(_dbContext);
         Tasks = new Repository<TodoTask>(_dbContext);
+        TaskSessions = new Repository<TodoTaskSession>(_dbContext);
         Notes = new Repository<Note>(_dbContext);
     }
 
@@ -24,7 +25,9 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<PageSharing> PageSharing { get; }
     public IRepository<TodoList> TaskLists { get; }
     public IRepository<TodoTask> Tasks { get; }
+    public IRepository<TodoTaskSession> TaskSessions { get; }
     public IRepository<Note> Notes { get; }
+
     public void Save()
     {
         _dbContext.SaveChanges();
