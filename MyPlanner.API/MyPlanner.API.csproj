@@ -13,7 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MyPlanner.API.Contracts\MyPlanner.API.Contracts.csproj" />
     <ProjectReference Include="..\MyPlanner.Service\MyPlanner.Service.csproj" />
     <ProjectReference Include="..\MyPlanner.Data\MyPlanner.Data.csproj" />
   </ItemGroup>

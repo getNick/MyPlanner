@@ -74,14 +74,14 @@ public class TasksController : ControllerBase
     [HttpPost("{taskId}/sessions/start")]
     public async Task<IActionResult> StartSession(Guid taskId)
     {
-        bool isSuccess = await _taskService.StartSessionAsync(taskId);
+        bool isSuccess = await _taskService.StartSessionAsync(taskId, DateTime.Now);
         return isSuccess ? Ok() : NotFound();
     }
 
     [HttpPost("{id}/sessions/stop")]
     public async Task<IActionResult> StopSession(Guid taskId)
     {
-        bool isSuccess = await _taskService.StopSessionAsync(taskId);
+        bool isSuccess = await _taskService.StopSessionAsync(taskId, DateTime.Now);
         return isSuccess ? Ok() : NotFound();
     }
 

@@ -154,4 +154,9 @@ public class TodoTaskService : ITodoTaskService
     {
         throw new NotImplementedException();
     }
+
+    Task<IReadOnlyList<TodoTask>> ITodoTaskService.GetAllSessionsAsync(Guid taskId)
+    {
+        throw new NotImplementedException();
+    }
 }
