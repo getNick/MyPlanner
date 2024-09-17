@@ -1,16 +1,13 @@
 import React, { createContext, useRef, useState } from "react";
-import EditorJS from "@editorjs/editorjs";
+import EditorJS, { OutputData } from "@editorjs/editorjs";
 // @ts-ignore
 import List from "@editorjs/list";
 // @ts-ignore
 import Checklist from '@editorjs/checklist'
 // @ts-ignore
-// import Link from '@editorjs/link'
-// @ts-ignore
-import Embed from '@editorjs/embed';
+import YoutubeEmbed from 'editorjs-youtube-embed';
 // @ts-ignore
 import Header from 'editorjs-header-with-alignment';
-
 
 export type EditorContextType = {
     initEditor: () => void;
@@ -39,7 +36,7 @@ const EditorContextProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     },
                     List,
                     Checklist,
-                    Embed,
+                    youtubeEmbed: YoutubeEmbed,
                 }
             })
             editorInstanceRef.current = editor;
