@@ -1,0 +1,43 @@
+services:
+  frontend:
+    image: myPlanner/react:latest
+    build: MyPlanner.Clients/React
+    restart: always
+    ports:
+      - '8000:3000'
+    expose:
+      - '8000'
+
+  api:
+    image: myPlanner/api:latest
+    build: .
+    depends_on:
+      - database
+    restart: always
+    ports:
+      - '8080:8080'
+    expose:
+      - '8080'
+    environment:
+      MYSQLCONNSTR_localdb: ${MYSQLCONNSTR_localdb}
+
+  database:
+    image: mysql
+    container_name: mysql
+    volumes:
+      - ./db_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+  phpmyadmin:
+    image: phpmyadmin:5.2.1-apache
+    ports:
+      - '8234:80'
+    environment:
+      PMA_HOST: database
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+volumes:
+  db_data:
