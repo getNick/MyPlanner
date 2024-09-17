@@ -11,7 +11,7 @@ import UpdateNote from "../entities/Note/UpdateNote";
 
 export default class TodoService {
 
-  private _baseUrl: string = "https://myplannerapi.azurewebsites.net/api/"
+  private _baseUrl: string = "https://myplanner-api.duckdns.org/api/"
 
   // Pages
   public async getPages(userId: string): Promise<Page[]> {
