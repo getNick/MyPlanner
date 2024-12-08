@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Common;
 using MyPlanner.Data.Entities.Notes;
@@ -74,27 +74,6 @@ public class ApplicationDbContext : DbContext
         if (connectionString == null)
             return string.Empty;
 
-        // WRONG: Database = localdb; Data Source = 127.0.0.1:50249; User Id = azure; Password = ****
-        //CORRECT: server=127.0.0.1;userid=azure;password=XXXX;database=localdb;Port=nnnnn
-        var builder = new System.Data.Common.DbConnectionStringBuilder();
-        builder.ConnectionString = connectionString;
-
-        // separate DataSource => server and port
-        if (builder.TryGetValue("Data Source", out object? dataSourceValue) && dataSourceValue != null)
-        {
-            var parts = dataSourceValue.ToString().Split(":");
-            builder.Remove("Data Source");
-            builder.Add("server", parts[0]);
-            if (parts.Count() > 1)
-                builder.Add("Port", parts[1]);
-        }
-        // replace databaseName
-        if (builder.TryGetValue("database", out object? databaseValue))
-        {
-            var databaseName = "myplanner";
-            builder.Remove("database");
-            builder.Add("database", databaseName);
-        }
-        return builder.ConnectionString;
+        return connectionString;
     }
 }
