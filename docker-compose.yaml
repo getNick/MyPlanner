@@ -1,7 +1,7 @@
 services:
   frontend:
     image: myPlanner/react:latest
-    build: MyPlanner.Clients/React
+    build: Frontends/React
     restart: always
     ports:
       - '8000:3000'
@@ -10,7 +10,7 @@ services:
 
   api:
     image: myPlanner/api:latest
-    build: .
+    build: Backends/DotNet
     depends_on:
       - database
     restart: always
