@@ -11,7 +11,7 @@ import UpdateNote from "../entities/Note/UpdateNote";
 
 export default class TodoService {
 
-  private _baseUrl: string = "https://myplanner-api.duckdns.org/api/"
+  private _baseUrl: string | undefined = process.env.REACT_APP_API_URL ?? 'http://localhost:8080/api/';
 
   // Pages
   public async getPages(userId: string): Promise<Page[]> {
