@@ -1,0 +1,29 @@
+name: Run Docker Compose
+
+# Trigger the workflow on push and pull request events
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-compose:
+    runs-on: self-hosted
+
+    steps:
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    # Step 2: Build and run Docker Compose
+    - name: Run Docker Compose
+      run: |
+        docker-compose up --build -d
+
+    # Step 3: Verify the services are running (Optional)
+    - name: Verify Services
+      run: |
+        docker ps
