@@ -12,8 +12,21 @@ ConfigureServices(builder.Services);
 
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy("MyAllowSpecificOrigins",
+                      policy =>
+                      {
+                          policy
+                          .WithOrigins("http://localhost:8000",
+                                       "http://localhost:3000",
+                                       "https://myplanner.duckdns.org/",
+                                       "https://myplanner.dev1.duckdns.org/",
+                                       "https://myplanner.dev2.duckdns.org/")
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                      });
 });
+
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -26,7 +39,7 @@ var app = builder.Build();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseCors();
+app.UseCors("MyAllowSpecificOrigins");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
