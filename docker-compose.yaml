@@ -28,7 +28,7 @@ services:
     image: mysql
     container_name: mysql
     volumes:
-      - ./db_data:/var/lib/mysql
+      - ${DB_VOLUME_PATH}:/var/lib/mysql
     restart: always
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
