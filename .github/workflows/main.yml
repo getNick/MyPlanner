@@ -27,6 +27,7 @@ jobs:
         MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
         HTTPS: ${{ vars.HTTPS }}
+        DB_VOLUME_PATH: ${{ vars.DB_VOLUME_PATH }}
 
     # Step 3: Verify the services are running (Optional)
     - name: Verify Services
