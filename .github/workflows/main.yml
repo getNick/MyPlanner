@@ -22,6 +22,11 @@ jobs:
     - name: Run Docker Compose
       run: |
         docker compose up --build -d
+      env: 
+        MYSQLCONNSTR_LOCALDB: ${{ secrets.MYSQLCONNSTR_LOCALDB }}
+        MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+        REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+        HTTPS: ${{ vars.HTTPS }}
 
     # Step 3: Verify the services are running (Optional)
     - name: Verify Services
