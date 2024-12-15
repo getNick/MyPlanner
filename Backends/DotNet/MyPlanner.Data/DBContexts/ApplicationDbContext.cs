@@ -1,4 +1,4 @@
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Common;
 using MyPlanner.Data.Entities.Notes;
@@ -69,7 +69,7 @@ public class ApplicationDbContext : DbContext
     }
     public static string GetConnectionString()
     {
-        string? connectionString = Environment.GetEnvironmentVariable("MYSQLCONNSTR_localdb");
+        string? connectionString = Environment.GetEnvironmentVariable("MYSQLCONNSTR_LOCALDB");
 
         if (connectionString == null)
             return string.Empty;
