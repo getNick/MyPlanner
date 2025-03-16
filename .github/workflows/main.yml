@@ -26,6 +26,7 @@ jobs:
         MYSQLCONNSTR_LOCALDB: ${{ secrets.MYSQLCONNSTR_LOCALDB }}
         MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+        REACT_APP_CLERK_PUBLISHABLE_KEY: ${{ secrets.REACT_APP_CLERK_PUBLISHABLE_KEY }}
         HTTPS: ${{ vars.HTTPS }}
         DB_VOLUME_PATH: ${{ vars.DB_VOLUME_PATH }}
 
