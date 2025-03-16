@@ -3,47 +3,21 @@ import { TodoContextType } from "./TodoContextType";
 import Page from "../entities/Pages/Page";
 import TodoList from "../entities/TodoList/TodoList";
 import TodoService from "../services/TodoService";
-import User from "../entities/User";
-import { googleLogout } from '@react-oauth/google';
-import { jwtDecode, JwtPayload } from 'jwt-decode'
+import { useAuth } from "@clerk/clerk-react";
 
 export const TodoContext = React.createContext<TodoContextType | null>(null);
 
 const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const todoService = new TodoService();
+  const { getToken } = useAuth();
+  const getJwtToken = async (): Promise<string | null> => {
+    return await getToken({ template: 'AspNetToken' });
+  };
+
+  const todoService = new TodoService(getJwtToken);
   const [titleCache] = useState<{ [key: string]: string }>({});
   const [openFoldersIds, setOpenFoldersIds] = useState<Set<string>>(new Set<string>());
   const [openListsIds, setOpenListsIds] = useState<Set<string>>(new Set<string>());
 
-  const getUserInfo = (accessToken: string | null): User | undefined => {
-    if (accessToken === null || accessToken === "")
-      return undefined;
-    const decoded: JwtPayload | any = jwtDecode(accessToken);
-    const user: User = new User(decoded?.email);
-    user.firstName = decoded?.given_name;
-    user.lastName = decoded?.family_name;
-    user.email = decoded?.email;
-    user.picture = decoded?.picture;
-    return user;
-  }
-
-  const userAccessToken = localStorage.getItem("user_access_token");
-  const [user, setUser] = useState<User | undefined>(getUserInfo(userAccessToken));
-
-  const login = async (accessToken: string) => {
-    localStorage.setItem("user_access_token", accessToken);
-    setUser(getUserInfo(accessToken));
-  }
-
-  const logout = async () => {
-    googleLogout();
-    localStorage.setItem("user_access_token", "");
-    setUser(undefined);
-  }
-
-  const isLoggedIn = (): boolean => {
-    return user !== undefined;
-  }
 
   const updateOpenFoldersIdsFromLocalStorage = async () => {
     const foldersStr = localStorage.getItem("openFoldersIds");
@@ -68,10 +42,8 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const fetchPages = async (): Promise<Page[] | undefined> => {
-    if (user === undefined)
-      return undefined;
     updateOpenFoldersIdsFromLocalStorage();
-    const items = await todoService.getPages(user.id);
+    const items = await todoService.getPages();
     updateTitleCache(items);
     return items;
   }
@@ -125,7 +97,6 @@ const TodoContextProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <TodoContext.Provider value={{
       todoService,
-      login, logout, user, isLoggedIn,
       fetchPages, fetchPage,
       getCachedTitle,
       openFoldersIds, toggleIsFolderOpen,

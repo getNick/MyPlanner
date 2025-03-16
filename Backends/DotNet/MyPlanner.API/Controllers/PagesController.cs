@@ -1,10 +1,14 @@
-﻿using Microsoft.AspNetCore.Http.HttpResults;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using MyPlanner.API.Models.Page;
 using MyPlanner.Service;
 
 namespace MyPlanner.API;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class PagesController : ControllerBase
 {
@@ -15,25 +19,24 @@ public class PagesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreatePage(CreatePageModel model)
+    public async Task<IActionResult> CreatePage(CreatePageRequest request)
     {
-        if (string.IsNullOrEmpty(model.Title) || string.IsNullOrEmpty(model.UserId))
+        string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(request.Title) || string.IsNullOrEmpty(userId))
         {
             return BadRequest();
         }
+
+        var model = new CreatePageModel(request.Title, userId, request.PageType, request.ParentPageId);
         Guid id = await _pageService.CreateAsync(model);
         return CreatedAtAction(nameof(CreatePage), id);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetPages([FromQuery] GetPagesModel model)
+    public async Task<IActionResult> GetPages()
     {
-        if (string.IsNullOrEmpty(model.UserId))
-        {
-            return BadRequest();
-        }
-
-        var items = await _pageService.GetAllAsync(model.UserId);
+        string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var items = await _pageService.GetAllAsync(userId);
         if (items.Any())
         {
             var dtos = items.Select(page => new PageModel(page)).ToArray();

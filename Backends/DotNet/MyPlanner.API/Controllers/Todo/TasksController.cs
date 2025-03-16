@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Http.HttpResults;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using MyPlanner.Service;
 
 namespace MyPlanner.API;
 
 [ApiController]
+[Authorize]
 [Route("api/todo/[controller]")]
 public class TasksController : ControllerBase
 {

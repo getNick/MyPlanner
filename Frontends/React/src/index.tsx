@@ -3,8 +3,14 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './components/App/App';
 import TodoContextProvider from './contexts/TodoContext';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import EditorContextProvider from './contexts/EditorContext';
+import { ClerkProvider } from '@clerk/clerk-react'
+
+const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error('Add your Clerk Publishable Key to the .env file')
+}
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -12,12 +18,12 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId="925086731832-rv91q8jptt6f8otrviu5tqpi04fa5ljs.apps.googleusercontent.com">
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
       <TodoContextProvider>
         <EditorContextProvider>
           <App />
         </EditorContextProvider>
       </TodoContextProvider>
-    </GoogleOAuthProvider>,
+    </ClerkProvider>
   </React.StrictMode>
 );

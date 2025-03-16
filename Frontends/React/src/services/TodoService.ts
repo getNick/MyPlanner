@@ -10,12 +10,15 @@ import Note from "../entities/Note/Note";
 import UpdateNote from "../entities/Note/UpdateNote";
 
 export default class TodoService {
+  private _baseUrl: string | undefined = process.env.REACT_APP_API_URL ?? 'http://localhost:5206/api/';
+  private getToken: () => Promise<string | null>;
 
-  private _baseUrl: string | undefined = process.env.REACT_APP_API_URL ?? 'http://localhost:8080/api/';
-
-  // Pages
-  public async getPages(userId: string): Promise<Page[]> {
-    const uri = `pages?UserId=${userId}`;
+  constructor(getToken: () => Promise<string | null>) {
+    this.getToken = getToken;
+  }
+  // Pages  
+  public async getPages(): Promise<Page[]> {
+    const uri = `pages`;
     const res = await this.getResource(uri);
     if (res === undefined)
       return [];
@@ -120,8 +123,12 @@ export default class TodoService {
 
   private async getResource(url: string): Promise<any> {
     try {
+      const token = await this.getToken();
       const request: string = `${this._baseUrl}${url}`;
-      const response = await fetch(request);
+      const response = await fetch(request, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch data from ${url}: ${response.status} ${response.statusText}`);
@@ -136,10 +143,14 @@ export default class TodoService {
 
   private async sendPostRequest(url: string, object: any): Promise<any> {
     try {
+      const token = await this.getToken();
       const request: string = `${this._baseUrl}${url}`;
       const response = await fetch(request, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(object)
       });
 
@@ -156,9 +167,11 @@ export default class TodoService {
 
   private async sendDeleteRequest(url: string): Promise<boolean> {
     try {
+      const token = await this.getToken();
       const request: string = `${this._baseUrl}${url}`;
       const response = await fetch(request, {
         method: 'Delete',
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) {
@@ -175,10 +188,14 @@ export default class TodoService {
 
   private async sendPutRequest(url: string, object: any): Promise<boolean> {
     try {
+      const token = await this.getToken();
       const request: string = `${this._baseUrl}${url}`;
       const response = await fetch(request, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(object)
       });
 

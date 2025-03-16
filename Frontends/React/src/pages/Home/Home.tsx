@@ -13,10 +13,11 @@ import { PageType } from '../../entities/Pages/PageType';
 import CreatePage from '../../entities/Pages/CreatePage';
 import SharePageModal from '../../components/SharePageModal/SharePageModal';
 import SharePage from '../../entities/Pages/SharePage';
+import { useAuth, SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout, fetchPages, todoService, openFoldersIds, toggleIsFolderOpen } = useTodoContext();
+  const { fetchPages, todoService, openFoldersIds, toggleIsFolderOpen } = useTodoContext();
   const [pages, setPages] = useState<Page[] | undefined>();
   const [isAddListModalOpen, setIsAddListModalOpen] = useState<boolean>(false);
   const [isSharePageModalOpen, setIsSharePageModalOpen] = useState<boolean>(false);
@@ -33,9 +34,7 @@ const Home: React.FC = () => {
 
 
   const onAddPage = async (title: string, parentPageId: string | undefined, pageType: PageType) => {
-    if (user === undefined)
-      return;
-    const model = new CreatePage(title, user?.id, pageType, parentPageId);
+    const model = new CreatePage(title, pageType, parentPageId);
     const listId = await todoService.createPage(model);
     await updateFolders()
   }
@@ -178,14 +177,7 @@ const Home: React.FC = () => {
   return (
     <div className="flex flex-col h-full flex-auto m-0 p-1">
       <div className="flex p-2 justify-between bg-slate-200 ">
-        <div className='flex'>
-          <img width={40} src={user?.picture} alt='image'></img>
-          <div className='flex flex-col ml-1'>
-            <p>{user?.firstName} planer</p>
-            <p className=''>{user?.email}</p>
-          </div>
-        </div>
-        <button onClick={logout} className='bg-slate-300 p-2 rounded'>Logout</button>
+        <UserButton />
       </div>
       <div className="flex justify-between p-1">
         <span>Lists</span>

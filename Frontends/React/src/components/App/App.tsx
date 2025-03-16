@@ -7,12 +7,14 @@ import SignIn from '../../pages/SignIn/SignIn';
 import Home from '../../pages/Home/Home';
 import TodoListPage from '../../pages/TodoListPage/TodoListPage';
 import NotePage from '../../pages/NotePage/NotePage';
+import { useAuth } from '@clerk/clerk-react';
 
 const App: React.FC = () => {
   const todoContext = useTodoContext();
+  const { isSignedIn } = useAuth()
 
   const privatePage = (page: any) => {
-    if (todoContext.isLoggedIn() === false) {
+    if (isSignedIn === false) {
       console.log("navigate to login")
       return <Navigate to={"login"} />
     }
@@ -52,7 +54,7 @@ const App: React.FC = () => {
   ]);
 
   return (
-    <div className="container grid md:grid-flow-col h-screen m-0">
+    <div className="grid md:grid-flow-col h-screen w-screen m-0">
       <RouterProvider router={router} fallbackElement={<p>Loading...</p>} />
     </div>);
 }
