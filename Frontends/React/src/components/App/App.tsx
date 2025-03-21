@@ -1,25 +1,14 @@
 import React from 'react';
 import './App.css';
 import TodoTaskView from '../../pages/TodoTaskView/TodoTaskView';
-import { RouterProvider, createBrowserRouter, defer, Navigate, } from 'react-router-dom';
-import { useTodoContext } from '../../contexts/TodoContext';
+import { RouterProvider, createBrowserRouter, Navigate } from 'react-router-dom';
 import SignIn from '../../pages/SignIn/SignIn';
 import Home from '../../pages/Home/Home';
 import TodoListPage from '../../pages/TodoListPage/TodoListPage';
 import NotePage from '../../pages/NotePage/NotePage';
-import { useAuth } from '@clerk/clerk-react';
+import ProtectedRoute from '../ProtectedRoute/ProtectedRoute';
 
 const App: React.FC = () => {
-  const todoContext = useTodoContext();
-  const { isSignedIn } = useAuth()
-
-  const privatePage = (page: any) => {
-    if (isSignedIn === false) {
-      console.log("navigate to login")
-      return <Navigate to={"login"} />
-    }
-    return page;
-  }
 
   const router = createBrowserRouter([
     {
@@ -28,35 +17,52 @@ const App: React.FC = () => {
     },
     {
       path: "/",
-      element: privatePage(<Home />),
+      element: (
+        <ProtectedRoute>
+          <Home />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "list/:listId",
       loader: async ({ params }) => {
         return params.listId;
       },
-      element: privatePage(<TodoListPage />)
+      element: (
+        <ProtectedRoute>
+          <TodoListPage />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "list/:listId/task/:taskId",
       loader: async ({ params }) => {
         return params.taskId;
       },
-      element: privatePage(<TodoTaskView />)
+      element: (
+        <ProtectedRoute>
+          <TodoTaskView />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "note/:noteId",
       loader: async ({ params }) => {
         return params.noteId;
       },
-      element: privatePage(<NotePage />)
+      element: (
+        <ProtectedRoute>
+          <NotePage />
+        </ProtectedRoute>
+      ),
     },
   ]);
 
   return (
     <div className="grid md:grid-flow-col h-screen w-screen m-0">
       <RouterProvider router={router} fallbackElement={<p>Loading...</p>} />
-    </div>);
+    </div>
+  );
 }
 
 export default App;
