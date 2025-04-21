@@ -8,6 +8,8 @@ import PageContent from "../entities/Pages/PageContent";
 import SharePage from "../entities/Pages/SharePage";
 import Note from "../entities/Note/Note";
 import UpdateNote from "../entities/Note/UpdateNote";
+import StartTaskSession from "../entities/TodoList/StartTaskSession";
+import StopTaskSession from "../entities/TodoList/StopTaskSession";
 
 export default class TodoService {
   private _baseUrl: string | undefined = process.env.REACT_APP_API_URL ?? 'http://localhost:5206/api/';
@@ -85,6 +87,16 @@ export default class TodoService {
 
   public async updateTask(updateTask: UpdateTask): Promise<boolean> {
     const res = await this.sendPutRequest("todo/tasks", updateTask);
+    return res;
+  }
+
+  public async startTaskSession(startTaskSession: StartTaskSession): Promise<boolean> {
+    const res = await this.sendPutRequest(`todo/tasks/${startTaskSession.taskId}/sessions/start`, startTaskSession);
+    return res;
+  }
+
+  public async stopTaskSession(stopTaskSession: StopTaskSession): Promise<boolean> {
+    const res = await this.sendPutRequest(`todo/tasks${stopTaskSession.taskId}/sessions/stop`, stopTaskSession);
     return res;
   }
 

@@ -2,14 +2,16 @@ import React, { useEffect, useState } from "react";
 import TodoList from "../../entities/TodoList/TodoList";
 import './TodoListPage.css'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBars, faEllipsis, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import TodoTask from "../../entities/TodoList/TodoTask";
-import { Menu } from "@headlessui/react";
 import UpdateTask from "../../entities/TodoList/UpdateTask";
 import { useTodoContext } from "../../contexts/TodoContext";
 import { useLoaderData } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
 import TextInput from "../../components/TextInput/TextInput";
+import TimerControl from "../../components/TimerControl/TimerControl";
+import StartTaskSession from "../../entities/TodoList/StartTaskSession";
+import StopTaskSession from "../../entities/TodoList/StopTaskSession";
 
 const TodoListPage: React.FC = () => {
   const pageId = useLoaderData() as string;
@@ -51,13 +53,6 @@ const TodoListPage: React.FC = () => {
     updateList();
   }
 
-  const onDeleteTask = async (task: TodoTask) => {
-    const isRemoved: boolean = await todoService.deleteTask(task.id);
-    if (isRemoved) {
-      updateList();
-    }
-  }
-
   const navigateBack = () => {
     navigate(-1);
   }
@@ -66,34 +61,30 @@ const TodoListPage: React.FC = () => {
     navigate(`task/${task.id}`);
   }
 
-  const getTaskOptions = (task: TodoTask): React.ReactNode => {
-    return (
-      <Menu as="div" className="relative inline-block text-left">
-        <Menu.Button className="h-full w-10 text-zinc-700">
-          <FontAwesomeIcon icon={faEllipsis} />
-        </Menu.Button>
-        <Menu.Items className="absolute z-10 right-0 mt-2 p-2 origin-top-left divide-y divide-gray-100 rounded-md bg-white shadow-lg focus:outline-none">
-          <Menu.Item>
-            {({ active }) => (
-              <button className={`item ${active ? 'item-selected' : ''}`} onClick={() => onDeleteTask(task)}>
-                <span className='px-2'>Delete</span>
-              </button>
-            )}
-          </Menu.Item>
-        </Menu.Items>
-      </Menu>
-    );
+  const startTaskSession = async (task: TodoTask, timestamp: number) => {
+    await todoService.startTaskSession(new StartTaskSession(task.id, timestamp));
+  }
+  const stopTaskSession = async (task: TodoTask, timestamp: number) => {
+    await todoService.stopTaskSession(new StopTaskSession(task.id, timestamp));
   }
 
   const getTaskView = (task: TodoTask): React.ReactNode => {
     const isSelected: Boolean = false;
     const styleName: string = isSelected ? " item-selected" : "";
     const completeTaskStyle: string = task.isComplete ? "line-through" : "";
+    const isRunning: boolean = task.startedSessionTimestamp !== undefined;
+    const startTimestamp: number | undefined = task.startedSessionTimestamp;
     return (
       <li key={task.id} className={`item ${styleName} pl-3 pr-1 flex-auto`}>
         <input type="checkbox" checked={task.isComplete} onChange={() => onToggleIsComplete(task)} className="ml-2 w-4 h-4 rounded" />
         <span className={`${completeTaskStyle} ml-1 flex-auto`} onClick={() => navigateToTask(task)} >{task.title}</span>
-        {getTaskOptions(task)}
+        {!task.isComplete &&
+          <TimerControl
+            isRunning={isRunning}
+            startTimestamp={startTimestamp}
+            onStart={(timestamp) => startTaskSession(task, timestamp)}
+            onStop={(timestamp) => stopTaskSession(task, timestamp)}
+          />}
       </li>
     );
   }
