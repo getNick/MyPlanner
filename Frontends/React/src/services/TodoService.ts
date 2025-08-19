@@ -91,12 +91,12 @@ export default class TodoService {
   }
 
   public async startTaskSession(startTaskSession: StartTaskSession): Promise<boolean> {
-    const res = await this.sendPutRequest(`todo/tasks/${startTaskSession.taskId}/sessions/start`, startTaskSession);
+    const res = await this.sendPostRequest(`todo/tasks/${startTaskSession.taskId}/sessions/start`, startTaskSession);
     return res;
   }
 
   public async stopTaskSession(stopTaskSession: StopTaskSession): Promise<boolean> {
-    const res = await this.sendPutRequest(`todo/tasks${stopTaskSession.taskId}/sessions/stop`, stopTaskSession);
+    const res = await this.sendPostRequest(`todo/tasks/${stopTaskSession.taskId}/sessions/stop`, stopTaskSession);
     return res;
   }
 

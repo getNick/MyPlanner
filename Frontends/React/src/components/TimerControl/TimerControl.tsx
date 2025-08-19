@@ -65,16 +65,24 @@ const TimerControl: React.FC<TimerControlProps> = (props) => {
 
     return (
         <div className="flex items-center space-x-4">
-            {isRunning &&
-                <div className="relative flex items-center justify-center h-6 text-red-400 font-mono text-lg">
-                    <span className="relative">{formatTime(time)}</span>
-                </div>}
-
-            <button className="relative flex items-center justify-center h-6 w-6 bg-red-200 rounded-full transition duration-300 hover:bg-red-300"
-                onClick={isRunning ? () => stopTimer : () => runTimer}>
-                <FontAwesomeIcon icon={isRunning ? faStop : faPlay}
-                    className="w-3 h-3 items-center justify-center text-red-500" />
-            </button>
+            {isRunning ? (
+                <>
+                    <div className="relative flex items-center justify-center h-6 text-red-400 font-mono text-lg">
+                        <span className="relative">{formatTime(time)}</span>
+                    </div>
+                    <button
+                        className="relative flex items-center justify-center h-6 w-6 bg-red-200 rounded-full transition duration-300 hover:bg-red-300"
+                        onClick={stopTimer}>
+                        <FontAwesomeIcon icon={faStop} className="w-3 h-3 items-center justify-center text-red-500" />
+                    </button>
+                </>
+            ) : (
+                <button
+                    className="relative flex items-center justify-center h-6 w-6 bg-green-200 rounded-full transition duration-300 hover:bg-green-300"
+                    onClick={runTimer}>
+                    <FontAwesomeIcon icon={faPlay} className="w-3 h-3 items-center justify-center text-green-500" />
+                </button>
+            )}
         </div>
     );
 };
