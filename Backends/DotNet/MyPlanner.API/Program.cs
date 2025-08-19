@@ -108,4 +108,5 @@ void ConfigureServices(IServiceCollection services)
     services.AddTransient<IPageService, PageService>();
     services.AddTransient<ITodoTaskService, TodoTaskService>();
     services.AddTransient<INoteService, NoteService>();
+    services.AddTransient<ITodoTaskSessionService, TodoTaskSessionService>();
 }
