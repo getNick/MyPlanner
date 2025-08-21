@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@clerk/clerk-react": "^5.24.2",
+    "@clerk/clerk-react": "^5.42.2",
     "@editorjs/checklist": "^1.6.0",
     "@editorjs/editorjs": "^2.29.1",
     "@editorjs/embed": "^2.7.1",
