@@ -110,13 +110,19 @@ public class PageService : IPageService
 
             PageContent? content = pageContent.Type switch
             {
-                PageContentEnum.TodoList => _unitOfWork.TaskLists.Get(x => x.Id == pageContent.Id).Include(x => x.Tasks).FirstOrDefault(),
+                PageContentEnum.TodoList => GetTodoList(pageContent.Id),
                 PageContentEnum.Note => _unitOfWork.Notes.Get(x => x.Id == pageContent.Id).FirstOrDefault(),
                 PageContentEnum.Folder => null,
                 _ => throw new NotImplementedException()
             };
             return content;
         });
+    }
+
+
+    private TodoList? GetTodoList(Guid id)
+    {
+        return _unitOfWork.TaskLists.Get(x => x.Id == id).Include(x => x.Tasks).ThenInclude(x => x.Sessions).FirstOrDefault();
     }
 
     public async Task<bool> UpdateAsync(UpdatePageModel model)

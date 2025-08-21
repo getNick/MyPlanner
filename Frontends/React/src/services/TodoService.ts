@@ -123,14 +123,20 @@ export default class TodoService {
     return new Page(folder.id, folder.title, pages, content);
   }
   private remapContent(content: any): TodoList | Note | undefined {
-    if (content.type === "TodoList")
-      return new TodoList(content.id, content.tasks);
-    if (content.type === "Note")
+    if (content.type === "TodoList") {
+      const tasks = content.tasks && Array.isArray(content.tasks)
+        ? content.tasks.map((task: any) => this.remapTask(task))
+        : [];
+      return new TodoList(content.id, tasks);
+    }
+    if (content.type === "Note") {
       return new Note(content.id, content.content);
+    }
     return undefined;
   }
+
   private remapTask(task: any): TodoTask {
-    return new TodoTask(task.id, task.title, task.listId, task.description, task.isComplete);
+    return new TodoTask(task.id, task.title, task.listId, task.description, task.isComplete, task.startedSessionTimestamp, task.sessions);
   }
 
   private async getResource(url: string): Promise<any> {

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using MyPlanner.API.Mapping;
 using MyPlanner.Service;
 
 namespace MyPlanner.API;
@@ -31,9 +32,11 @@ public class TasksController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetTask(Guid id)
     {
-        var folder = await _taskService.GetAsync(id);
-        if (folder != null)
-            return Ok(folder);
+        var task = await _taskService.GetAsync(id);
+        if (task != null)
+        {
+            return Ok(task.MapToResponse());
+        }
         return NotFound();
     }
 

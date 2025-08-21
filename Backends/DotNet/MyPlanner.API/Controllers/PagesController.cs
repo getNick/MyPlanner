@@ -2,7 +2,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using MyPlanner.API.Mapping;
 using MyPlanner.API.Models.Page;
+using MyPlanner.Data.Entities.Notes;
+using MyPlanner.Data.Entities.Todo;
 using MyPlanner.Service;
 
 namespace MyPlanner.API;
@@ -60,7 +63,16 @@ public class PagesController : ControllerBase
     {
         var page = await _pageService.GetPageContentAsync(id);
         if (page != null)
-            return Ok(page);
+        {
+            object response = page switch
+            {
+                // Note note => note,
+                TodoList todoList => todoList.MapToResponse(),
+                _ => page
+            };
+            return Ok(response);
+        }
+
         return NotFound();
     }
 

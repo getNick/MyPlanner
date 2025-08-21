@@ -47,7 +47,7 @@ public class TodoTaskService : ITodoTaskService
 
     public async Task<TodoTask?> GetAsync(Guid id)
     {
-        return await Task.Run(() => _unitOfWork.Tasks.GetById(id));
+        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.Id == id).Include(x => x.Sessions).FirstOrDefault());
     }
 
     public async Task<bool> UpdateAsync(UpdateTaskModel model)
