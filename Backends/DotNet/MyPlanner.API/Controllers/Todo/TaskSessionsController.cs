@@ -48,10 +48,10 @@ public class TaskSessionsController : ControllerBase
             ? DateTimeOffset.FromUnixTimeSeconds(request.Timestamp.Value).UtcDateTime
             : DateTime.UtcNow;
 
-        if (timestamp > DateTime.UtcNow)
-        {
-            return BadRequest("The provided time cannot be in the future.");
-        }
+        // if (timestamp > DateTime.UtcNow)
+        // {
+        //     return BadRequest("The provided time cannot be in the future.");
+        // }
 
         bool isSuccess = await _taskSessionService.StartSessionAsync(taskId, timestamp);
         return isSuccess ? Ok() : NotFound();
@@ -64,10 +64,10 @@ public class TaskSessionsController : ControllerBase
             ? DateTimeOffset.FromUnixTimeSeconds(request.Timestamp.Value).UtcDateTime
             : DateTime.UtcNow;
 
-        if (timestamp > DateTime.UtcNow)
-        {
-            return BadRequest("The provided time cannot be in the future.");
-        }
+        // if (timestamp > DateTime.UtcNow)
+        // {
+        //     return BadRequest("The provided time cannot be in the future.");
+        // }
         bool isSuccess = await _taskSessionService.StopSessionAsync(taskId, timestamp);
         return isSuccess ? Ok() : NotFound();
     }
