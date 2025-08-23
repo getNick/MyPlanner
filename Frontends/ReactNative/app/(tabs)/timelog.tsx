@@ -1,12 +1,11 @@
-import { StyleSheet } from 'react-native';
-
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { StyleSheet } from 'react-native';
 
-export default function HomeScreen() {
+export default function TimeLogger() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title">HomePage</ThemedText>
+      <ThemedText type="title">TimeLogger</ThemedText>
     </ThemedView>
   );
 }
