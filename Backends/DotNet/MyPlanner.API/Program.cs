@@ -1,22 +1,19 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using MyPlanner.Data.DBContexts;
 using MyPlanner.Data.UnitOfWork;
 using MyPlanner.Service;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MyPlanner.API;
 using MyPlanner.API.ExceptionHandlers;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 ConfigureServices(builder.Services);
 
 // Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
@@ -25,37 +22,16 @@ builder.Services.AddHttpClient();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddOpenApi(options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "MyPlanner API", Version = "v1" });
-
-    // Configure Swagger to use the Bearer token
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
     {
-        In = ParameterLocation.Header,
-        Description = "Please enter a valid token",
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        BearerFormat = "JWT",
-        Scheme = "Bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
+        document.Info.Title = "MyPlanner API";
+        document.Info.Version = "v1";
+        return Task.CompletedTask;
     });
 });
+
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -87,11 +63,12 @@ jwtOptions.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfigur
     new HttpDocumentRetriever { RequireHttps = true });
 
 // Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
+
 app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthentication();
