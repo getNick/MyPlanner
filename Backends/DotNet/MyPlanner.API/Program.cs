@@ -20,6 +20,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
+builder.Services.AddHttpClient();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -58,10 +59,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 options.Authority = builder.Configuration["Jwt:Issuer"];
                 options.Audience = builder.Configuration["Jwt:Audience"];
-                options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
-                        options.Authority,
-                        new FixedOpenIdConnectConfigurationRetriever(),
-                        new HttpDocumentRetriever { RequireHttps = true });
 
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -75,6 +72,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             });
 
 var app = builder.Build();
+
+// Post-build configuration to set up the FixedOpenIdConnectConfigurationRetriever
+var httpClientFactory = app.Services.GetRequiredService<IHttpClientFactory>();
+var jwtOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<JwtBearerOptions>>().Get(JwtBearerDefaults.AuthenticationScheme);
+jwtOptions.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+    jwtOptions.Authority,
+    new FixedOpenIdConnectConfigurationRetriever(httpClientFactory),
+    new HttpDocumentRetriever { RequireHttps = true });
 
 // Configure the HTTP request pipeline.
 //if (app.Environment.IsDevelopment())

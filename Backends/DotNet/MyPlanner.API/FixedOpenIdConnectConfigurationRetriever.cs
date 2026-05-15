@@ -4,7 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace MyPlanner.API;
 
-public class FixedOpenIdConnectConfigurationRetriever : IConfigurationRetriever<OpenIdConnectConfiguration>
+public class FixedOpenIdConnectConfigurationRetriever(IHttpClientFactory httpClientFactory) : IConfigurationRetriever<OpenIdConnectConfiguration>
 {
     public async Task<OpenIdConnectConfiguration> GetConfigurationAsync(string authority, IDocumentRetriever retriever, CancellationToken cancel)
     {
@@ -14,8 +14,8 @@ public class FixedOpenIdConnectConfigurationRetriever : IConfigurationRetriever<
         if (config.JwksUri == null)// If JwksUri is not set, fetch it
         {
             config.JwksUri = $"{authority}/.well-known/jwks.json";
-            using var httpClient = new HttpClient();
-            string jwksJson = await httpClient.GetStringAsync(config.JwksUri);
+            var httpClient = httpClientFactory.CreateClient();
+            string jwksJson = await httpClient.GetStringAsync(config.JwksUri, cancel);
             var jwksKeys = new JsonWebKeySet(jwksJson).GetSigningKeys();
             foreach (var key in jwksKeys)
             {
