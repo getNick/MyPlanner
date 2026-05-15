@@ -9,6 +9,7 @@ using System.Text;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MyPlanner.API;
+using MyPlanner.API.ExceptionHandlers;
 
 var builder = WebApplication.CreateBuilder(args);
 ConfigureServices(builder.Services);
@@ -21,6 +22,8 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
 builder.Services.AddHttpClient();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -72,6 +75,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             });
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 // Post-build configuration to set up the FixedOpenIdConnectConfigurationRetriever
 var httpClientFactory = app.Services.GetRequiredService<IHttpClientFactory>();
