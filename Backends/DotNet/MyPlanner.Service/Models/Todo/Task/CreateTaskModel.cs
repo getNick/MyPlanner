@@ -1,8 +1,8 @@
 ﻿namespace MyPlanner.Service;
 
-public class CreateTaskModel
+public class CreateTaskRequest
 {
-    public CreateTaskModel(string title, Guid listId)
+    public CreateTaskRequest(string title, Guid listId)
     {
         Title = title;
         ListId = listId;

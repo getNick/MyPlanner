@@ -19,7 +19,7 @@ public class TasksController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateTask(CreateTaskModel model)
+    public async Task<IActionResult> CreateTask(CreateTaskRequest model)
     {
         if (string.IsNullOrEmpty(model.Title))
         {
@@ -35,13 +35,13 @@ public class TasksController : ControllerBase
         var task = await _taskService.GetAsync(id);
         if (task != null)
         {
-            return Ok(task.MapToResponse());
+            return Ok(task);
         }
         return NotFound();
     }
 
     [HttpPut]
-    public async Task<IActionResult> UpdateTask(UpdateTaskModel model)
+    public async Task<IActionResult> UpdateTask(UpdateTaskRequest model)
     {
         bool isUpdated = await _taskService.UpdateAsync(model);
         if (isUpdated == false)

@@ -46,26 +46,6 @@ public static class ContractMapping
         return listResponse;
     }
 
-    public static TodoTaskResponse MapToResponse(this TodoTask task)
-    {
-        var taskResponse = new TodoTaskResponse()
-        {
-            Id = task.Id,
-            Title = task.Title,
-            Description = task.Description,
-            IsComplete = task.IsComplete,
-            ListId = task.ListId,
-            StartedSessionTimestamp = ToUnixTimestamp(task.Sessions.FirstOrDefault(s => s.End == null)?.Start),
-            Sessions = task.Sessions.Select(t => new TodoTaskSessionResponse()
-            {
-                Id = t.Id,
-                StartTimestamp = ToUnixTimestamp(t.Start),
-                EndTimestamp = ToUnixTimestamp(t.End)
-            }).ToList(),
-        };
-        return taskResponse;
-    }
-
     public static long? ToUnixTimestamp(DateTime? dateTime)
     {
         if (!dateTime.HasValue)

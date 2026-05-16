@@ -1,6 +1,6 @@
 ﻿namespace MyPlanner.Service;
 
-public class UpdateTaskModel
+public class UpdateTaskRequest
 {
     public Guid Id{get;set;}
     public string? Title{get;set;}

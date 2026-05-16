@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Todo;
 using MyPlanner.Data.UnitOfWork;
+using MyPlanner.Service.Mapping;
+using MyPlanner.Service.Models.Todo.Task;
 
 namespace MyPlanner.Service;
 
@@ -11,7 +13,7 @@ public class TodoTaskService : ITodoTaskService
     {
         _unitOfWork = unitOfWork;
     }
-    public async Task<Guid> CreateAsync(CreateTaskModel model)
+    public async Task<Guid> CreateAsync(CreateTaskRequest model)
     {
         return await Task.Run((() =>
         {
@@ -40,17 +42,17 @@ public class TodoTaskService : ITodoTaskService
         });
     }
 
-    public async Task<IReadOnlyList<TodoTask>> GetAllAsync(Guid listId)
+    public async Task<IReadOnlyList<TaskDetailsResponse>> GetAllAsync(Guid listId)
     {
-        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.ListId == listId).ToArray());
+        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.ListId == listId).Select(x=>x.MapToResponse()).ToArray());
     }
 
-    public async Task<TodoTask?> GetAsync(Guid id)
+    public async Task<TaskDetailsResponse?> GetAsync(Guid id)
     {
-        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.Id == id).Include(x => x.Sessions).FirstOrDefault());
+        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.Id == id).Include(x => x.Sessions).FirstOrDefault().MapToResponse());
     }
 
-    public async Task<bool> UpdateAsync(UpdateTaskModel model)
+    public async Task<bool> UpdateAsync(UpdateTaskRequest model)
     {
         return await Task.Run(() =>
         {
