@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Todo;
 using MyPlanner.Data.UnitOfWork;
 using MyPlanner.Service.Mapping;
@@ -17,7 +17,7 @@ public class TodoTaskService : ITodoTaskService
     {
         return await Task.Run((() =>
         {
-            if (string.IsNullOrEmpty(model.Title))
+            if (string.IsNullOrWhiteSpace(model.Title))
                 return Guid.Empty;
 
             var newTask = new TodoTask()
@@ -49,7 +49,7 @@ public class TodoTaskService : ITodoTaskService
 
     public async Task<TaskDetailsResponse?> GetAsync(Guid id)
     {
-        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.Id == id).Include(x => x.Sessions).FirstOrDefault().MapToResponse());
+        return await Task.Run(() => _unitOfWork.Tasks.Get(x => x.Id == id).Include(x => x.Sessions).FirstOrDefault()?.MapToResponse());
     }
 
     public async Task<bool> UpdateAsync(UpdateTaskRequest model)
