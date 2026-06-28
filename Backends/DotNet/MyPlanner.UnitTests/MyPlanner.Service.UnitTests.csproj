@@ -16,11 +16,17 @@
     <PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.13.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MyPlanner.Service\MyPlanner.Service.csproj" />
     <ProjectReference Include="..\MyPlanner.Data\MyPlanner.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\.env" CopyToOutputDirectory="PreserveNewest" Link=".env" />
+    <None Include="Resources\test-bill.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

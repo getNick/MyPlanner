@@ -1,7 +1,9 @@
+using dotenv.net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using MyPlanner.Data.DBContexts;
 using MyPlanner.Data.UnitOfWork;
+using Microsoft.Extensions.Options;
 using MyPlanner.Service;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Protocols;
@@ -9,6 +11,9 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MyPlanner.API;
 using MyPlanner.API.ExceptionHandlers;
 using Scalar.AspNetCore;
+
+// Load .env file for local development (environment variables override appsettings.json)
+DotEnv.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 ConfigureServices(builder.Services);
@@ -102,4 +107,8 @@ void ConfigureServices(IServiceCollection services)
     services.AddTransient<ITodoTaskService, TodoTaskService>();
     services.AddTransient<INoteService, NoteService>();
     services.AddTransient<ITodoTaskSessionService, TodoTaskSessionService>();
+
+    // Register LlmSettings as typed options from configuration
+    services.Configure<MyPlanner.Service.Models.LlmSettings>(builder.Configuration.GetSection("LlmSettings"));
+    services.AddScoped<ILlmService, LlmService>();
 }
