@@ -1,0 +1,108 @@
+{
+  "items": [
+    {
+      "name": "Соус Торчин Тартар",
+      "fullName": "Соус Торчин Тартар д/п 200г",
+      "unitPrice": 29.99,
+      "quantity": 1,
+      "totalPrice": 29.99,
+      "category": "Groceries",
+      "subcategory": "Pantry"
+    },
+    {
+      "name": "Філе стегна куряче",
+      "fullName": "Філе стегна куряче охл. Вл/Вир ваг",
+      "unitPrice": 219.0,
+      "quantity": 0.738,
+      "totalPrice": 161.62,
+      "category": "Groceries",
+      "subcategory": "Meat"
+    },
+    {
+      "name": "Крило куряче плечова частина",
+      "fullName": "Крило куряче плечова частина Вл/Вир ваг",
+      "unitPrice": 109.0,
+      "quantity": 1.356,
+      "totalPrice": 147.8,
+      "category": "Groceries",
+      "subcategory": "Meat"
+    },
+    {
+      "name": "Круасан Французький масляний",
+      "fullName": "Круасан Французький масляний, 55г",
+      "unitPrice": 36.99,
+      "quantity": 3,
+      "totalPrice": 110.97,
+      "category": "Groceries",
+      "subcategory": "Bakery"
+    },
+    {
+      "name": "Лаваш вірменський тонкий",
+      "fullName": "Лаваш вірменський тонкий Кулиничі 200г",
+      "unitPrice": 28.99,
+      "quantity": 1,
+      "totalPrice": 28.99,
+      "category": "Groceries",
+      "subcategory": "Bakery"
+    },
+    {
+      "name": "Банан",
+      "fullName": "Банан ваг",
+      "unitPrice": 71.89,
+      "quantity": 0.578,
+      "totalPrice": 41.55,
+      "category": "Groceries",
+      "subcategory": "Fruits & Veggies"
+    },
+    {
+      "name": "Пакет середній Novus",
+      "fullName": "Пакет середній 34*55 Novus 7кг",
+      "unitPrice": 5.99,
+      "quantity": 1,
+      "totalPrice": 5.99,
+      "category": "Household & Supplies",
+      "subcategory": "Cleaning & Consumables"
+    },
+    {
+      "name": "Мед натуральний різнотрав'я Novus",
+      "fullName": "Мед натуральний різнотрав'я Novus 400г",
+      "unitPrice": 99.99,
+      "quantity": 1,
+      "totalPrice": 99.99,
+      "category": "Groceries",
+      "subcategory": "Pantry"
+    },
+    {
+      "name": "Хліб картопляний",
+      "fullName": "Хліб картопляний под ваг",
+      "unitPrice": 149.0,
+      "quantity": 0.184,
+      "totalPrice": 27.42,
+      "category": "Groceries",
+      "subcategory": "Bakery"
+    },
+    {
+      "name": "Йогурт Турецький",
+      "fullName": "Йогурт Турецький 8% Яготин 260г ст.",
+      "unitPrice": 29.99,
+      "quantity": 1,
+      "totalPrice": 29.99,
+      "category": "Groceries",
+      "subcategory": "Dairy & Eggs"
+    },
+    {
+      "name": "Пакет майка зелений біо",
+      "fullName": "Пакет майка зелений біо",
+      "unitPrice": 1.2,
+      "quantity": 2,
+      "totalPrice": 2.4,
+      "category": "Household & Supplies",
+      "subcategory": "Cleaning & Consumables"
+    }
+  ],
+  "merchantName": "Novus",
+  "timestamp": "2026-04-28T18:33",
+  "totalAmount": 686.71,
+  "currency": "UAH"
+}
+

@@ -73,7 +73,8 @@ public class LlmServiceTests
             Env.Load(envPath);
         }
     }
-
+    
+    [Explicit("Integration test — requires a valid LLM API credentials")] 
     [TestCaseSource(nameof(LlmServiceTestCases))]
     public async Task RequestToLmStudioAsync_ReturnsNonEmptyResponse(Service.Models.LlmSettings llmSettings)
     {
@@ -100,7 +101,8 @@ public class LlmServiceTests
         Assert.That(response, Is.Not.Null.And.Not.Empty);
         Assert.That(response.Length, Is.GreaterThan(10));
     }
-    
+
+    [Explicit("Integration test — requires a real image file and valid LLM API credentials")] 
     [TestCaseSource(nameof(LlmServiceTestCases))]
     public async Task ProcessReceiptAsync_WithRealImage_ShouldReturnParsedReceipt(Service.Models.LlmSettings llmSettings)
     {
@@ -131,11 +133,11 @@ public class LlmServiceTests
         using var imageStream = new FileStream(testImagePath, FileMode.Open, FileAccess.Read);
         var prompt = """
 You are a receipt analysis assistant. Extract all items from the provided receipt image and return them in JSON format.
-For each item, provide: name (string), price (number), quantity (integer).
+For each item, provide: name (string), unitPrice (number — price per single unit), quantity (integer), totalPrice (number — calculated as unitPrice × quantity).
 Also extract: totalAmount (number, nullable), storeName (string, nullable), date (ISO 8601 string, nullable).
 Return ONLY valid JSON with no additional text. Use this exact schema:
 {
-    "items": [{"name": "item name", "price": 9.99, "quantity": 2}],
+    "items": [{"name": "item name", "unitPrice": 9.99, "quantity": 2, "totalPrice": 19.98}],
     "totalAmount": 19.98,
     "storeName": "Store Name",
     "date": "2024-01-15T10:30:00Z"
@@ -153,21 +155,10 @@ If any field is not available, omit it from the JSON response.
         Assert.That(rawJsonResponse, Is.Not.Null.And.Not.Empty,
             "LLM API should return a non-empty JSON response");
 
-        // If ExpectedJson is set (after first real call), compare directly.
-        if (!string.IsNullOrEmpty(ExpectedJson))
-        {
-            Assert.That(rawJsonResponse, Is.EqualTo(ExpectedJson),
-                "Unwrapped JSON response should match expected value from previous API call");
-        }
-        else
-        {
-            // First run — verify the LLM response structure is valid (clean JSON, no wrapper)
-            var parsed = System.Text.Json.JsonDocument.Parse(rawJsonResponse);
-            Assert.That(parsed.RootElement.TryGetProperty("items", out _), Is.True,
-                "LLM response should contain 'items' property (unwrapped from provider format)");
-
-            Console.WriteLine($"\n=== First run — unwrapped LLM response (paste into ExpectedJson below) ===\n{rawJsonResponse}\n========================================================================\n");
-        }
+        var actualDoc = JsonDocument.Parse(rawJsonResponse);
+        var expectedDoc = JsonDocument.Parse(ExpectedJson);
+        Assert.That(JsonCompare(actualDoc.RootElement, expectedDoc.RootElement), Is.True,
+            $"JSON mismatch.\nExpected:\n{expectedDoc.RootElement.GetRawText()}\nActual:\n{actualDoc.RootElement.GetRawText()}");
     }
 
     private static object[] LlmServiceTestCases() => new object[] { 
@@ -180,6 +171,134 @@ If any field is not available, omit it from the JSON response.
     // first test run.  The assertion above will compare against this.
     // Leave empty to skip comparison (first-run mode).
     // ──────────────────────────────────────────────────────────────
-    private const string ExpectedJson = "";
+    private const string ExpectedJson = """
+{
+    "items": [
+        {
+            "name": "Соус Торчин Тартар д/п 200г",
+            "unitPrice": 29.99,
+            "quantity": 1,
+            "totalPrice": 29.99
+        },
+        {
+            "name": "Філе стегна куряче охл. Вл/Вир ваг",
+            "unitPrice": 161.62,
+            "quantity": 1,
+            "totalPrice": 161.62
+        },
+        {
+            "name": "Крило куряче плечова частина Вл/Вир ваг",
+            "unitPrice": 147.80,
+            "quantity": 1,
+            "totalPrice": 147.80
+        },
+        {
+            "name": "Круасан Французький масляний, 55г",
+            "unitPrice": 36.99,
+            "quantity": 3,
+            "totalPrice": 110.97
+        },
+        {
+            "name": "Лаваш вірменський тонкий Кулиничі 200г",
+            "unitPrice": 28.99,
+            "quantity": 1,
+            "totalPrice": 28.99
+        },
+        {
+            "name": "Банан ваг",
+            "unitPrice": 41.55,
+            "quantity": 1,
+            "totalPrice": 41.55
+        },
+        {
+            "name": "Пакет середній 34*55 Novus 7кг",
+            "unitPrice": 5.99,
+            "quantity": 1,
+            "totalPrice": 5.99
+        },
+        {
+            "name": "Мед натуральний різнотрав'я Novus 400г",
+            "unitPrice": 99.99,
+            "quantity": 1,
+            "totalPrice": 99.99
+        },
+        {
+            "name": "Хліб картопляний под ваг",
+            "unitPrice": 27.42,
+            "quantity": 1,
+            "totalPrice": 27.42
+        },
+        {
+            "name": "Йогурт Турецький 8% Яготин 260г ст.",
+            "unitPrice": 29.99,
+            "quantity": 1,
+            "totalPrice": 29.99
+        },
+        {
+            "name": "Пакет майка зелений біо",
+            "unitPrice": 1.20,
+            "quantity": 2,
+            "totalPrice": 2.40
+        }
+    ],
+    "totalAmount": 686.71,
+    "date": "2026-04-28T18:33:00Z"
+}
+""";
+
+    // ──────────────────────────────────────────────────────────────
+    // Recursively compare two JsonElements for structural equality,
+    // ignoring whitespace / formatting differences.
+    // ──────────────────────────────────────────────────────────────
+    private static bool JsonCompare(JsonElement a, JsonElement b)
+    {
+        if (a.ValueKind != b.ValueKind)
+            return false;
+
+        switch (a.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var propsA = a.EnumerateObject().ToList();
+                var propsB = b.EnumerateObject().ToList();
+                if (propsA.Count != propsB.Count)
+                    return false;
+                foreach (var propA in propsA)
+                {
+                    if (!b.TryGetProperty(propA.Name, out var propB))
+                        return false;
+                    if (!JsonCompare(propA.Value, propB))
+                        return false;
+                }
+                return true;
+
+            case JsonValueKind.Array:
+                var arrA = a.EnumerateArray().ToList();
+                var arrB = b.EnumerateArray().ToList();
+                if (arrA.Count != arrB.Count)
+                    return false;
+                for (int i = 0; i < arrA.Count; i++)
+                {
+                    if (!JsonCompare(arrA[i], arrB[i]))
+                        return false;
+                }
+                return true;
+
+            case JsonValueKind.String:
+                return a.GetString() == b.GetString();
+
+            case JsonValueKind.Number:
+                return a.GetRawText() == b.GetRawText();
+
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return true;
+
+            case JsonValueKind.Null:
+                return true;
+
+            default:
+                return false;
+        }
+    }
 
 }
