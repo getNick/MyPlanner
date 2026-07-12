@@ -1,6 +1,8 @@
 ﻿using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
+using MyPlanner.Data.Entities;
 using MyPlanner.Data.Entities.Common;
+using MyPlanner.Data.Entities.Finance;
 using MyPlanner.Data.Entities.Notes;
 using MyPlanner.Data.Entities.Todo;
 
@@ -15,6 +17,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<TodoTask> TodoTasks { get; set; }
     public DbSet<TodoTaskSession> TodoTasksSessions { get; set; }
     public DbSet<Note> Notes { get; set; }
+
+    public DbSet<PaymentMethod> PaymentMethods { get; set; }
+    public DbSet<Transaction> Transactions { get; set; }
+    public DbSet<TransactionItem> TransactionItems { get; set; }
 
     public ApplicationDbContext(DbContextOptions options) : base(options)
     {
@@ -62,6 +68,42 @@ public class ApplicationDbContext : DbContext
         builder.Entity<TodoTaskSession>()
             .HasOne<TodoTask>()
             .WithMany(x => x.Sessions).HasForeignKey(x => x.TodoTaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Finance entities - configure property conversions separately
+        var paymentMethodBuilder = builder.Entity<PaymentMethod>();
+        paymentMethodBuilder.Property(x => x.Type).HasConversion<string>();
+        paymentMethodBuilder.Property(x => x.Currency).HasConversion<string>();
+        paymentMethodBuilder.HasIndex(x => x.UserId);
+
+        var transactionBuilder = builder.Entity<Transaction>();
+        transactionBuilder.Property(x => x.Type).HasConversion<string>();
+        transactionBuilder.Property(x => x.Currency).HasConversion<string>();
+        transactionBuilder.Property(x => x.DataOrigin).HasConversion<string>();
+        transactionBuilder.HasIndex(x => x.UserId);
+
+        builder.Entity<TransactionItem>()
+            .Property(x => x.Origin)
+            .HasConversion<string>();
+
+        // Configure foreign key relationships for finance entities
+        builder.Entity<Transaction>()
+            .HasOne<PaymentMethod>()
+            .WithMany()
+            .HasForeignKey(x => x.PaymentMethodId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Transaction>()
+            .HasOne<PaymentMethod>()
+            .WithMany()
+            .HasForeignKey(x => x.ToPaymentMethodId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.Entity<TransactionItem>()
+            .HasOne<Transaction>()
+            .WithMany(x => x.Items)
+            .HasForeignKey(x => x.TransactionId)
             .OnDelete(DeleteBehavior.Cascade);
 
         base.OnModelCreating(builder);
