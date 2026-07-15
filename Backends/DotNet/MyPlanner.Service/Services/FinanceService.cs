@@ -2,7 +2,9 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.DBContexts;
 using MyPlanner.Data.Entities.Finance;
+using MyPlanner.Service.Exceptions;
 using MyPlanner.Service.Helpers;
+using MyPlanner.Service.Helpers.BankExport;
 using MyPlanner.Service.Interfaces;
 using MyPlanner.Service.Models;
 using MyPlanner.Service.Requests.Finance;
@@ -99,9 +101,132 @@ public class FinanceService : IFinanceService
     }
 
     // Transaction operations
-    public Task<IReadOnlyList<Transaction>> ProcessBankingFileAsync(ProcessBankingFileRequest request, string userId) =>
-        Task.FromException<IReadOnlyList<Transaction>>(
-            new NotSupportedException("Bank statement import is not available yet."));
+    /// <summary>
+    /// Reads a statement file for the target payment method and reports what it says — row count,
+    /// date span, rows needing review — without storing anything. The confirmation step of a
+    /// two-step import; the browser keeps the file between the two calls.
+    /// </summary>
+    public async Task<BankStatementSummary> PreviewBankingFileAsync(ProcessBankingFileRequest request, string userId)
+    {
+        var (paymentMethod, parsed) = await ReadBankStatementAsync(request, userId);
+        return BuildSummary(paymentMethod, parsed);
+    }
+
+    /// <summary>
+    /// Inserts a confirmed statement file: rows the ledger has never seen become Bank Transactions,
+    /// rows it already has are counted as duplicates and skipped (dedupe stays timestamp + amount,
+    /// policy proper is ticket 03). Rows without a readable date were held back by the parser and
+    /// are reported, never inserted.
+    /// </summary>
+    public async Task<BankStatementImportResult> ImportBankingFileAsync(ProcessBankingFileRequest request, string userId)
+    {
+        var (paymentMethod, parsed) = await ReadBankStatementAsync(request, userId);
+
+        // Deduplicate against existing transactions for this user using (Timestamp, |Amount|).
+        // Stored amounts are absolute (the sign lives in Type), so the statement's signed figure
+        // is normalised the same way before comparison — otherwise a re-imported expense never matches.
+        var existingKeys = (await _context.Transactions
+                .Where(t => t.UserId == userId && t.Timestamp != null)
+                .Select(t => new { t.Timestamp, t.Amount })
+                .ToListAsync())
+            .Select(t => (t.Timestamp!.Value, Math.Abs(t.Amount)))
+            .ToHashSet();
+
+        var newTransactions = new List<Transaction>();
+        var duplicateRowCount = 0;
+
+        foreach (var dto in parsed.Rows)
+        {
+            var key = (dto.Timestamp!.Value, Math.Abs(dto.Amount));
+            if (!existingKeys.Add(key))
+            {
+                duplicateRowCount++;
+                continue;
+            }
+
+            // Amount sign handling: negative → Expense, positive → Income; zero treated as Income.
+            // Type is the row's money role — clients read it, they never re-derive it from signs.
+            var type = dto.Amount < 0 ? TransactionType.Expense : TransactionType.Income;
+
+            var transaction = new Transaction
+            {
+                UserId = userId,
+                Type = type,
+                PaymentMethodId = request.PaymentMethodId,
+                Timestamp = dto.Timestamp,
+                // Original-currency figure, absolute; the card-currency figure is kept beside it.
+                Amount = Math.Abs(dto.Amount),
+                Currency = TryParseCurrency(dto.Currency, paymentMethod.Currency),
+                BaseAmount = dto.BaseAmount.HasValue ? Math.Abs(dto.BaseAmount.Value) : null,
+                Description = dto.Description,
+                BalanceAfter = dto.BalanceAfter,
+                DataOrigin = DataOrigin.Bank,
+                RawTransactionData = null
+            };
+
+            ApplyMccCategory(transaction, dto);
+            newTransactions.Add(transaction);
+        }
+
+        // Bulk insert (EF Core cascades TransactionItems). Saved before the result is built so the
+        // returned rows carry their generated ids.
+        if (newTransactions.Count > 0)
+        {
+            _context.Transactions.AddRange(newTransactions);
+            await _context.SaveChangesAsync();
+        }
+
+        return new BankStatementImportResult(
+            BuildSummary(paymentMethod, parsed),
+            InsertedRowCount: newTransactions.Count,
+            DuplicateRowCount: duplicateRowCount,
+            Transactions: newTransactions.AsReadOnly());
+    }
+
+    /// <summary>
+    /// Resolves the import target and reads its file. Both refusals happen here, once:
+    /// a method with no bank set (nothing to read the file with), and a bank we have no profile for.
+    /// </summary>
+    private async Task<(PaymentMethod PaymentMethod, BankParseResult Parsed)> ReadBankStatementAsync(
+        ProcessBankingFileRequest request, string userId)
+    {
+        var paymentMethod = await _context.PaymentMethods
+            .FirstOrDefaultAsync(pm => pm.Id == request.PaymentMethodId && pm.UserId == userId);
+        if (paymentMethod == null)
+            throw new InvalidOperationException(
+                $"Payment method with ID {request.PaymentMethodId} not found for user {userId}.");
+
+        if (string.IsNullOrWhiteSpace(paymentMethod.BankProvider))
+            throw new UnsupportedBankProviderException(
+                $"{paymentMethod.Name} has no bank set, so there is no statement format to read. " +
+                "Set the bank on the payment method first.");
+
+        // One entry point decides file kind and column map; there is no default profile to fall
+        // back onto — by design.
+        var parsed = BankExportParser.Parse(request.FileStream, request.ContentType, paymentMethod.BankProvider);
+
+        return (paymentMethod, parsed);
+    }
+
+    private static BankStatementSummary BuildSummary(PaymentMethod paymentMethod, BankParseResult parsed)
+    {
+        DateTime? first = null, last = null;
+        foreach (var row in parsed.Rows)
+        {
+            if (!row.Timestamp.HasValue) continue;
+            if (first is null || row.Timestamp < first) first = row.Timestamp;
+            if (last is null || row.Timestamp > last) last = row.Timestamp;
+        }
+
+        return new BankStatementSummary(
+            paymentMethod.Id,
+            paymentMethod.Name,
+            paymentMethod.BankProvider ?? string.Empty,
+            parsed.Rows.Count,
+            first,
+            last,
+            parsed.NeedsReview.Select(BankStatementReviewRow.From).ToList());
+    }
 
     /// <summary>
     /// Converts a string currency code to the Currency enum.
@@ -121,28 +246,50 @@ public class FinanceService : IFinanceService
             $"Unknown currency code '{currencyString}'. Supported values: {string.Join(", ", Enum.GetNames<Currency>())}");
     }
 
+    /// <summary>
+    /// Maps a statement's currency code onto the ledger's enum. "EUR" is the ISO spelling of the
+    /// stored <c>EURO</c>; an unknown or missing code falls back to the payment method's own
+    /// currency, because a row charged to this card is in something this card holds.
+    /// </summary>
     private static Currency TryParseCurrency(string? currencyString, Currency fallback)
     {
-        if (!string.IsNullOrWhiteSpace(currencyString) &&
-            Enum.TryParse<Currency>(currencyString.Trim(), ignoreCase: true, out var parsed))
+        if (!string.IsNullOrWhiteSpace(currencyString))
         {
-            return parsed;
+            var code = currencyString.Trim().ToUpperInvariant();
+            if (code == "EUR")
+                return Currency.EURO;
+            if (Enum.TryParse<Currency>(code, ignoreCase: true, out var parsed))
+                return parsed;
         }
         return fallback;
     }
 
-    private static TransactionItem CreateTransactionItem(string description, (string? Category, string? Subcategory)? mccCategory)
+    /// <summary>
+    /// Gives a row without Line Items its category: the MCC decides where the money went. A row
+    /// that already carries items keeps whatever categorisation they have — this never overwrites
+    /// a person's or a receipt's line detail with a merchant-code guess.
+    /// </summary>
+    private static void ApplyMccCategory(Transaction transaction, TransactionDto dto)
     {
-        return new TransactionItem
+        if (transaction.Items.Count > 0)
+            return;
+
+        (string? Category, string? Subcategory)? mccCategory = dto.MCC.HasValue
+            ? ReceiptCategories.GetCategoryFromMcc(dto.MCC.Value)
+            : null;
+
+        // All required members must be set in the object initializer. EF Core will
+        // overwrite TransactionId with the correct FK when the parent is added to context.
+        transaction.Items.Add(new TransactionItem
         {
             TransactionId = Guid.Empty,
-            Name = description,
-            FullName = description,
+            Name = dto.Description,
+            FullName = dto.Description,
             Category = mccCategory?.Category,
             Subcategory = mccCategory?.Subcategory,
             Origin = ItemOrigin.AutoGenerated,
             Quantity = 1
-        };
+        });
     }
 
     /// <summary>Runs OCR only. No ledger row is created until the corrected draft is confirmed.</summary>
@@ -213,9 +360,9 @@ public class FinanceService : IFinanceService
         if (startDate.HasValue || endDate.HasValue)
         {
             if (startDate.HasValue)
-                query = query.Where(t => t.Timestamp >= startDate.Value);
+                query = query.Where(t => t.Timestamp.HasValue && t.Timestamp >= startDate.Value);
             if (endDate.HasValue)
-                query = query.Where(t => t.Timestamp <= endDate.Value);
+                query = query.Where(t => t.Timestamp.HasValue && t.Timestamp <= endDate.Value);
         }
 
         return await query
@@ -258,6 +405,7 @@ public class FinanceService : IFinanceService
         existing.Description = model.Description;
         existing.AdditionalNotes = model.AdditionalNotes;
         existing.BalanceAfter = model.BalanceAfter;
+        existing.DataOrigin = model.DataOrigin;
         existing.RawTransactionData = model.RawTransactionData;
 
         await _context.SaveChangesAsync();

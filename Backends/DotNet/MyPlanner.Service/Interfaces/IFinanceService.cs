@@ -19,7 +19,18 @@ public interface IFinanceService
     Task<PaymentMethodDeletionResult> DeletePaymentMethodAsync(Guid id, string userId);
 
     // Transaction operations (includes transaction items)
-    Task<IReadOnlyList<Transaction>> ProcessBankingFileAsync(ProcessBankingFileRequest request, string userId);
+    /// <summary>
+    /// Reads a bank statement for the target payment method and reports what it says — row count,
+    /// date span, rows needing review — storing nothing. Refuses a target with no bank set and a
+    /// file that is not a CSV statement.
+    /// </summary>
+    Task<BankStatementSummary> PreviewBankingFileAsync(ProcessBankingFileRequest request, string userId);
+
+    /// <summary>
+    /// Inserts a confirmed statement as Bank Transactions: new rows land with their original amount,
+    /// currency and card-currency base amount; rows the ledger already has are counted, not doubled.
+    /// </summary>
+    Task<BankStatementImportResult> ImportBankingFileAsync(ProcessBankingFileRequest request, string userId);
     Task<ReceiptDto> PreviewReceiptAsync(ProcessReceiptRequest request);
     Task<Transaction> ConfirmReceiptAsync(ConfirmReceiptRequest request, string userId);
     Task<IReadOnlyList<Transaction>> GetTransactionsAsync(string? userId = null, DateTime? startDate = null, DateTime? endDate = null);

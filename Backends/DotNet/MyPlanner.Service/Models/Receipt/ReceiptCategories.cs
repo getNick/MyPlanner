@@ -109,4 +109,62 @@ public static class ReceiptCategories
     /// </summary>
     public static IReadOnlyList<string> GetAllSubcategories() =>
         Categories.SelectMany(c => c.Subcategories).ToArray().AsReadOnly();
+
+    /// <summary>
+    /// Maps MCC (Merchant Category Code) to budget category and subcategory.
+    /// Based on standard ISO 18245 MCC codes. Only returns categories/subcategories defined in this file.
+    /// </summary>
+    public static (string Category, string Subcategory)? GetCategoryFromMcc(int mccCode)
+    {
+        return mccCode switch
+        {
+            // Specific single-value MCCs first
+            5462 => ("Entertainment & Leisure", "Hobbies"),           // Bookstores
+            7832 => ("Entertainment & Leisure", "Movies & Events"),   // Movie Theaters
+            7833 => ("Entertainment & Leisure", "Movies & Events"),   // Movie Theaters
+            7922 => ("Entertainment & Leisure", "Hobbies"),           // Sports/Recreation
+            4131 => ("Transportation", "Public Transit & Rideshare"), // Taxi/Rideshare
+            5533 => ("Transportation", "Fuel/Gas"),                   // Gas Station
+            7372 => ("Housing & Utilities", "Internet & TV"),         // Internet/Cable TV
+            7519 => ("Transportation", "Parking & Tolls"),            // Parking
+            7523 => ("Transportation", "Parking & Tolls"),            // Parking
+
+            // Donations — leave unclassified
+            4829 => null,
+
+            // Food & Restaurants
+            >= 5811 and <= 5819 => ("Dining & Takeaway", "Restaurants"),
+            >= 5411 and <= 5439 => ("Groceries", "Pantry"),           // Supermarkets
+            >= 5441 and <= 5461 => ("Groceries", "Snacks"),           // Candy/Confectionery
+            >= 5463 and <= 5499 => ("Groceries", "Meat"),             // Meat/Poultry/Fish
+
+            // Shopping & Retail
+            >= 5310 and <= 5399 => ("Household & Supplies", "Cleaning & Consumables"), // Department Stores
+            >= 5611 and <= 5699 => ("Personal Care & Clothes", "Clothing & Shoes"),    // Clothing
+            >= 5912 and <= 5949 => ("Health & Wellness", "Medicine & Supplements"),    // Drugstore/Pharmacy
+            >= 5990 and <= 5998 => ("Household & Supplies", "Cleaning & Consumables"), // Misc Retail
+
+            // Entertainment & Leisure (broad range — must come after specific codes)
+            >= 7011 and <= 7209 => ("Entertainment & Leisure", "Travel & Vacations"),
+            >= 7300 and <= 7371 => ("Financial & Future", "Debt & Loan Payments"),     // Business Services
+            >= 7373 and <= 7831 => ("Entertainment & Leisure", "Travel & Vacations"),
+            >= 7834 and <= 7921 => ("Entertainment & Leisure", "Travel & Vacations"),
+            >= 7923 and <= 7999 => ("Entertainment & Leisure", "Travel & Vacations"),
+
+            // Services & Healthcare
+            >= 7210 and <= 7299 => ("Personal Care & Clothes", "Haircuts & Grooming"), // Personal Services
+            >= 8011 and <= 8042 => ("Health & Wellness", "Medical & Dental"),          // Doctors/Dentists
+            >= 8044 and <= 8099 => ("Health & Wellness", "Medical & Dental"),          // Hospitals/Services
+            >= 8211 and <= 8299 => ("Entertainment & Leisure", "Education & Courses"), // Education
+
+            // Transportation
+            >= 4111 and <= 4121 => ("Transportation", "Public Transit & Rideshare"),   // Public Transit
+            >= 5531 and <= 5532 => ("Transportation", "Fuel/Gas"),                     // Gas Stations
+
+            // Utilities & Communications
+            >= 4900 and <= 4999 => ("Housing & Utilities", "Utilities"),               // Utilities
+
+            _ => null
+        };
+    }
 }

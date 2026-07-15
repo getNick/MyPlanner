@@ -210,4 +210,50 @@ public class ReceiptCategoriesTests
         Assert.That(all, Contains.Item("Kids' Clothes & Shoes"));
         Assert.That(all, Is.Not.Contains("Kids' Clothes and shoes"));
     }
+    
+    [Test]
+    public void GetCategoryFromMcc_ShouldMapCorrectly()
+    {
+        // Test various MCC codes map to expected categories (using ReceiptCategories definitions)
+        var testCases = new (int Mcc, string? ExpectedCategory)[]
+        {
+            (5814, "Dining & Takeaway"),           // Restaurant
+            (5411, "Groceries"),                   // Supermarket
+            (5310, "Household & Supplies"),        // Department Store
+            (5611, "Personal Care & Clothes"),     // Clothing
+            (5912, "Health & Wellness"),           // Drugstore
+            (4111, "Transportation"),              // Public Transit
+            (4900, "Housing & Utilities"),         // Utilities
+            (7523, "Transportation"),              // Parking
+            (4829, null),                          // Donations — leave unclassified
+            (9999, null),                          // Unknown MCC
+        };
+
+        foreach (var testCase in testCases)
+        {
+            var result = ReceiptCategories.GetCategoryFromMcc(testCase.Mcc);
+            Assert.That(result?.Category, Is.EqualTo(testCase.ExpectedCategory),
+                $"MCC {testCase.Mcc} should map to category '{testCase.ExpectedCategory}'");
+        }
+    }
+
+    [Test]
+    public void GetCategoryFromMcc_Subcategory_ShouldMapCorrectly()
+    {
+        var testCases = new (int Mcc, string? ExpectedSubcategory)[]
+        {
+            (5814, "Restaurants"),
+            (5411, "Pantry"),
+            (5310, "Cleaning & Consumables"),
+            (5611, "Clothing & Shoes"),
+            (7523, "Parking & Tolls"),
+        };
+
+        foreach (var testCase in testCases)
+        {
+            var result = ReceiptCategories.GetCategoryFromMcc(testCase.Mcc);
+            Assert.That(result?.Subcategory, Is.EqualTo(testCase.ExpectedSubcategory),
+                $"MCC {testCase.Mcc} should map to subcategory '{testCase.ExpectedSubcategory}'");
+        }
+    }
 }

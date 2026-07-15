@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <None Include="..\.env" CopyToOutputDirectory="PreserveNewest" Link=".env" />
+    <None Include="Resources\test-banking-file.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Resources\test-bill.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Resources\test-bill.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
