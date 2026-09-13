@@ -11,7 +11,7 @@ using MyPlanner.Service.Requests.Finance;
 
 namespace MyPlanner.Service;
 
-public class FinanceService : IFinanceService
+public partial class FinanceService : IFinanceService
 {
     private readonly ApplicationDbContext _context;
     private readonly ILlmService _llmService;
@@ -118,15 +118,19 @@ public class FinanceService : IFinanceService
     /// policy proper is ticket 03). Rows without a readable date were held back by the parser and
     /// are reported, never inserted.
     /// </summary>
-    public async Task<BankStatementImportResult> ImportBankingFileAsync(ProcessBankingFileRequest request, string userId)
+    public Task<BankStatementImportResult> ImportBankingFileAsync(ProcessBankingFileRequest request, string userId) =>
+        InTransactionAsync(() => ImportBankingFileCoreAsync(request, userId));
+
+    private async Task<BankStatementImportResult> ImportBankingFileCoreAsync(ProcessBankingFileRequest request, string userId)
     {
         var (paymentMethod, parsed) = await ReadBankStatementAsync(request, userId);
 
-        // Deduplicate against existing transactions for this user using (Timestamp, |Amount|).
+        // A Provisional Bill is not bank evidence, even at the exact statement Timestamp.
+        // The broader deduplication policy remains timestamp + absolute amount.
         // Stored amounts are absolute (the sign lives in Type), so the statement's signed figure
         // is normalised the same way before comparison — otherwise a re-imported expense never matches.
         var existingKeys = (await _context.Transactions
-                .Where(t => t.UserId == userId && t.Timestamp != null)
+                .Where(t => t.UserId == userId && t.Timestamp != null && t.DataOrigin != DataOrigin.Receipt)
                 .Select(t => new { t.Timestamp, t.Amount })
                 .ToListAsync())
             .Select(t => (t.Timestamp!.Value, Math.Abs(t.Amount)))
@@ -161,7 +165,7 @@ public class FinanceService : IFinanceService
                 Description = dto.Description,
                 BalanceAfter = dto.BalanceAfter,
                 DataOrigin = DataOrigin.Bank,
-                RawTransactionData = null
+                RawTransactionData = dto.RawTransactionData
             };
 
             ApplyMccCategory(transaction, dto);
@@ -176,11 +180,22 @@ public class FinanceService : IFinanceService
             await _context.SaveChangesAsync();
         }
 
+        // Matching runs after the file is written down, so both ingestion orders end in the same place.
+        var reconciliation = await MatchTransactionsAsync(userId, newTransactions.Select(t => t.Id).ToArray());
+        await _context.SaveChangesAsync();
+
+        var survivingIds = newTransactions
+            .Select(t => reconciliation.GetValueOrDefault(t.Id, t.Id)).ToArray();
+        var stored = await _context.Transactions.AsNoTracking().Include(t => t.Items)
+            .Where(t => t.UserId == userId && survivingIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id);
+
         return new BankStatementImportResult(
             BuildSummary(paymentMethod, parsed),
             InsertedRowCount: newTransactions.Count,
             DuplicateRowCount: duplicateRowCount,
-            Transactions: newTransactions.AsReadOnly());
+            ReconciledCount: reconciliation.Count,
+            Transactions: survivingIds.Select(id => stored[id]).ToArray());
     }
 
     /// <summary>
@@ -239,6 +254,7 @@ public class FinanceService : IFinanceService
             return Currency.UAH;
 
         var trimmed = currencyString.Trim().ToUpperInvariant();
+        if (trimmed == "EUR") return Currency.EURO;
         if (Enum.TryParse<Currency>(trimmed, ignoreCase: true, out var parsed))
             return parsed;
 
@@ -297,7 +313,10 @@ public class FinanceService : IFinanceService
         ReceiptParser.ProcessReceiptAsync(_llmService, request.FileStream, request.ContentType);
 
     /// <summary>Validates and saves the user's corrected Bill Draft.</summary>
-    public async Task<Transaction> ConfirmReceiptAsync(ConfirmReceiptRequest request, string userId)
+    public Task<Transaction> ConfirmReceiptAsync(ConfirmReceiptRequest request, string userId) =>
+        InTransactionAsync(() => ConfirmReceiptCoreAsync(request, userId));
+
+    private async Task<Transaction> ConfirmReceiptCoreAsync(ConfirmReceiptRequest request, string userId)
     {
         var receipt = request.Receipt;
         if (receipt.Timestamp is null)
@@ -342,7 +361,11 @@ public class FinanceService : IFinanceService
 
         _context.Transactions.Add(transaction);
         await _context.SaveChangesAsync();
+        await MatchTransactionsAsync(userId, new[] { transaction.Id });
+        await _context.SaveChangesAsync();
 
+        // The re-read returns the merged truth — DataOrigin, bank amount, delta — so the upload
+        // step shows the row as it now is, not as it was before Matching ran.
         return await _context.Transactions.AsNoTracking()
             .Include(t => t.Items)
             .FirstAsync(t => t.Id == transaction.Id);
@@ -350,7 +373,9 @@ public class FinanceService : IFinanceService
 
     public async Task<IReadOnlyList<Transaction>> GetTransactionsAsync(string? userId = null, DateTime? startDate = null, DateTime? endDate = null)
     {
-        var query = _context.Transactions.AsQueryable();
+        // Items travel with the row: MoneyDelta reads them, and a Reconciled row without its
+        // Line Items would silently report its whole amount as the delta.
+        var query = _context.Transactions.Include(t => t.Items).AsQueryable();
 
         if (!string.IsNullOrEmpty(userId))
         {
@@ -365,14 +390,13 @@ public class FinanceService : IFinanceService
                 query = query.Where(t => t.Timestamp.HasValue && t.Timestamp <= endDate.Value);
         }
 
-        return await query
-            .Include(t => t.Items)
-            .ToListAsync();
+        return await query.ToListAsync();
     }
 
     public async Task<Transaction?> GetTransactionAsync(Guid id, string userId)
     {
         return await _context.Transactions
+            .Include(t => t.Items)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
     }
 
@@ -387,29 +411,54 @@ public class FinanceService : IFinanceService
         return model.Id;
     }
 
-    public async Task<bool> UpdateTransactionAsync(string userId, Transaction model)
+    public Task<Transaction?> UpdateTransactionAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items = null) =>
+        InTransactionAsync(() => UpdateTransactionCoreAsync(userId, model, items));
+
+    private async Task<Transaction?> UpdateTransactionCoreAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items)
     {
-        await ValidateTransactionWriteAsync(userId, model);
-        var existing = await _context.Transactions
+        var existing = await _context.Transactions.Include(t => t.Items)
             .FirstOrDefaultAsync(t => t.Id == model.Id && t.UserId == userId);
-        
+
         if (existing == null)
-            return false;
+            return null;
+
+        if (existing.DataOrigin == DataOrigin.Reconciled && existing.Type != model.Type)
+            throw new InvalidOperationException("A Reconciled Bill's bank Type cannot be changed by a Bill edit.");
+        if (items != null && existing.DataOrigin == DataOrigin.Receipt
+                          && (model.DataOrigin != DataOrigin.Receipt || model.Type != TransactionType.Expense))
+            throw new InvalidOperationException("A complete Provisional Bill edit must remain a Receipt Expense.");
+        if (existing.DataOrigin != DataOrigin.Reconciled)
+            await ValidateTransactionWriteAsync(userId, model);
+        if (items != null) ReplaceBillLineItems(existing, items);
 
         existing.Type = model.Type;
-        existing.PaymentMethodId = model.PaymentMethodId;
-        existing.ToPaymentMethodId = model.ToPaymentMethodId;
-        existing.Timestamp = model.Timestamp;
-        existing.Amount = model.Amount;
-        existing.Currency = model.Currency;
+
+        // The bank's figures are not the household's to retype. On a Reconciled row a Bill edit may
+        // change what the paper says (description, notes, Line Items) — that widens Money Delta,
+        // nothing else. Without this guard a header PUT would rewrite the bank amount and detach
+        // the card.
+        if (existing.DataOrigin != DataOrigin.Reconciled)
+        {
+            existing.PaymentMethodId = model.PaymentMethodId;
+            existing.ToPaymentMethodId = model.ToPaymentMethodId;
+            existing.Timestamp = model.Timestamp;
+            existing.Amount = model.Amount;
+            existing.Currency = model.Currency;
+            existing.BalanceAfter = model.BalanceAfter;
+            existing.DataOrigin = model.DataOrigin;
+        }
+
         existing.Description = model.Description;
         existing.AdditionalNotes = model.AdditionalNotes;
-        existing.BalanceAfter = model.BalanceAfter;
-        existing.DataOrigin = model.DataOrigin;
-        existing.RawTransactionData = model.RawTransactionData;
 
         await _context.SaveChangesAsync();
-        return true;
+        if (items != null && existing.DataOrigin == DataOrigin.Receipt)
+        {
+            await MatchTransactionsAsync(userId, new[] { existing.Id });
+            await _context.SaveChangesAsync();
+        }
+        return await _context.Transactions.AsNoTracking().Include(t => t.Items)
+            .FirstAsync(t => t.Id == existing.Id && t.UserId == userId);
     }
 
     private async Task ValidateTransactionWriteAsync(string userId, Transaction model)
@@ -463,7 +512,7 @@ public class FinanceService : IFinanceService
         if (transaction == null)
             throw new InvalidOperationException(
                 $"Transaction with ID {model.TransactionId} not found for user {userId}.");
-        if (transaction.DataOrigin is DataOrigin.Receipt)
+        if (transaction.DataOrigin is DataOrigin.Receipt or DataOrigin.Reconciled)
             ValidateBillLineItem(model);
 
         _context.TransactionItems.Add(model);
@@ -479,7 +528,7 @@ public class FinanceService : IFinanceService
         if (existing == null)
             return false;
         var parent = await _context.Transactions.FirstAsync(t => t.Id == existing.TransactionId);
-        if (parent.DataOrigin is DataOrigin.Receipt)
+        if (parent.DataOrigin is DataOrigin.Receipt or DataOrigin.Reconciled)
             ValidateBillLineItem(model);
 
         existing.Name = model.Name;

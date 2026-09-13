@@ -70,7 +70,7 @@ public class CsvBankExportParser : IBankExportParser
                 .Select((_, i) => i < csv.Parser.Count ? (csv.GetField(i) ?? string.Empty) : string.Empty)
                 .ToList();
 
-            TryParseRow(values, columnMap, profile, rowNumber, rows, needsReview);
+            TryParseRow(values, columnMap, profile, rowNumber, csv.Parser.RawRecord, rows, needsReview);
         }
 
         // Rows newest-first, matching the bank's own export order; needs-review in file order.
@@ -110,6 +110,7 @@ public class CsvBankExportParser : IBankExportParser
         Dictionary<string, int> columnMap,
         BankExportProfile profile,
         int rowNumber,
+        string? rawRecord,
         List<TransactionDto> rows,
         List<UnreadableBankRow> needsReview)
     {
@@ -153,7 +154,9 @@ public class CsvBankExportParser : IBankExportParser
             Currency = ReadCurrency(values, columnMap, profile),
             MCC = ReadOptionalInt(values, columnMap, "MCC"),
             BalanceAfter = ReadOptionalDecimal(values, columnMap, "BalanceAfter"),
-            RawTransactionData = null,
+            // The verbatim statement line, kept so the ledger can show — and later rebuild — exactly
+            // what the bank printed.
+            RawTransactionData = rawRecord,
         });
     }
 

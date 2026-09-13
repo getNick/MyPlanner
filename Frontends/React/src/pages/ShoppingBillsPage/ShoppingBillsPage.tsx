@@ -29,11 +29,9 @@ import { useAuth } from "@clerk/clerk-react";
  * Vendor / Date / Category / Amount. Unexpanded rows keep that exact flat look;
  * clicking a row expands it inline to reveal the structured BillReportPanel.
  * Edits are staged inside each self-contained BillReportPanel while editing
- * and committed once, on Save Refinements: one header PUT /transactions/{id}
- * plus parallel PUT per edited line item and parallel DELETE for locally-
- * deleted items (aggregated). Deleting an item removes it from the panel right
- * away but its server DELETE is staged with the save payload — never fired on
- * its own. No onChange/onDeleteItem delegation: the panel owns staging.
+ * and committed once through PUT /transactions/{id}, including the complete Line
+ * Item collection. Matching happens after the complete edit, in the same commit.
+ * No individual item write is fired: the panel owns staging.
  */
 
 // Newest-first comparison: createdAt (ISO) wins, else timestamp fallback.
@@ -41,48 +39,6 @@ function compareNewestFirst(a: SavedBill, b: SavedBill): number {
   const ta = a.createdAt || a.timestamp || "";
   const tb = b.createdAt || b.timestamp || "";
   return tb.localeCompare(ta);
-}
-
-// Return a copy of a record with one key removed (no-op if absent), used to
-// clear a receipt's tracked expanded/loading state on delete.
-function stripKey<T>(record: Record<string, T>, key: string): Record<string, T> {
-  if (!(key in record)) return record;
-  const next = { ...record };
-  delete next[key];
-  return next;
-}
-
-function transactionRowFromBill(bill: SavedBill): BackendTransaction {
-  return {
-    id: bill.id,
-    userId: "",
-    type: "Expense",
-    paymentMethodId: null,
-    toPaymentMethodId: null,
-    timestamp: bill.timestamp ?? null,
-    amount: bill.totalAmount,
-    currency: (bill.currency || "UAH") as BackendTransaction["currency"],
-    baseAmount: null,
-    description: bill.merchantName || "Receipt purchase",
-    additionalNotes: bill.additionalNotes ?? null,
-    balanceAfter: null,
-    dataOrigin: bill.dataOrigin,
-    moneyDelta: bill.moneyDelta,
-    rawTransactionData: null,
-    createdAt: bill.createdAt,
-    items: bill.items.map((item) => ({
-      id: item.id || "",
-      transactionId: bill.id,
-      name: item.name,
-      fullName: item.fullName || item.name,
-      category: item.category ?? null,
-      subcategory: item.subcategory ?? null,
-      quantity: item.quantity,
-      pricePerUnit: item.unitPrice,
-      totalPrice: item.totalPrice,
-      origin: "ManualInput",
-    })),
-  };
 }
 
 function reconciliationBadge(bill: SavedBill): React.ReactNode {
@@ -118,26 +74,6 @@ export function ShoppingBillsPage() {
   const [listRows, setListRows] = useState<BackendTransaction[]>([]);
 
   const [categories, setCategories] = useState<Category[]>([]);
-
-  // Per-row expansion is owned by each BillReportPanel (self-contained card).
-  // The parent only tracks which rows are expanded to drive lazy item loading
-  // and the per-row loading/deleting indicators — not for rendering.
-  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
-
-  // Report a row's expansion back to its panel. Guard against no-op toggles so
-  // we only refetch once per expand (items are cached via itemsLoaded).
-  const handleExpandChange = useCallback(
-    (billId: string) => (isExpanded: boolean) => {
-      if (expandedIds[billId] === isExpanded) return;
-      setExpandedIds((prev) => ({ ...prev, [billId]: isExpanded }));
-    },
-    [expandedIds],
-  );
-
-  // Transactions come back without their line items (backend returns them
-  // item-less). Track which expanded receipts already had their items loaded
-  // so we don't re-fetch on every expand/collapse toggle.
-  const [itemsLoaded, setItemsLoaded] = useState<Record<string, boolean>>({});
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -182,29 +118,8 @@ export function ShoppingBillsPage() {
         if (!active) return;
         const filtered = billsForReconciliation(all);
         setListRows(filtered);
-        const mapped: SavedBill[] = filtered.map((t) => ({
-          id: t.id,
-          merchantName:
-            t.description !== "Receipt purchase" ? t.description : undefined,
-          timestamp: t.timestamp ?? undefined,
-          totalAmount: Number(t.amount),
-          currency: financeService.mapCurrency(t.currency),
-          additionalNotes: t.additionalNotes ?? undefined,
-          createdAt: t.createdAt || "",
-          tags: [],
-          dataOrigin: t.dataOrigin,
-          moneyDelta: moneyDeltaOf(t),
-          items: (t.items || []).map((it) => ({
-            id: it.id ?? undefined,
-            name: it.name ?? "",
-            fullName: it.fullName ?? "",
-            quantity: Number(it.quantity),
-            unitPrice: Number(it.pricePerUnit),
-            totalPrice: Number(it.totalPrice),
-            category: it.category ?? undefined,
-            subcategory: it.subcategory ?? undefined,
-          })),
-        }));
+        const mapped = filtered.map((row) =>
+          backendTransactionToSavedBill(row, (currency) => financeService.mapCurrency(currency)));
         setReceipts(mapped.sort(compareNewestFirst));
       } catch (e) {
         if (active) setLoadError(e instanceof Error ? e.message : String(e));
@@ -219,67 +134,6 @@ export function ShoppingBillsPage() {
       active = false;
     };
   }, [financeService]);
-
-  // ── Fetch line items for every expanded receipt that isn't loaded yet ───
-  // Transactions come back without their items by design. Each BillReportPanel
-  // reports its own expansion via onExpandChange; we batch-load the newly
-  // expanded rows here and cache per id so we don't re-fetch on toggle.
-  useEffect(() => {
-    const pending = receipts
-      .filter((b) => expandedIds[b.id] && !itemsLoaded[b.id])
-      .map((b) => b.id);
-
-    if (pending.length === 0) return;
-
-    let active = true;
-
-    void Promise.all(
-      pending.map((billId) =>
-        financeService
-          .getTransactionItems(billId)
-          .then((backendItems) => {
-            const lineItems = backendItems.map((it) => ({
-              id: it.id ?? undefined,
-              name: it.name ?? "",
-              fullName: it.fullName ?? "",
-              quantity: Number(it.quantity),
-              unitPrice: Number(it.pricePerUnit),
-              totalPrice: Number(it.totalPrice),
-              category: it.category ?? undefined,
-              subcategory: it.subcategory ?? undefined,
-            }));
-
-            if (!active) return;
-            setListRows((previous) => previous.map((row) => row.id === billId ? { ...row, items: backendItems } : row));
-
-            // Merge fetched server items into the persisted bill.
-            setReceipts((prev) =>
-              prev
-                .map((b) =>
-                  b.id === billId ? { ...b, items: lineItems } : b,
-                )
-                .sort(compareNewestFirst),
-            );
-          })
-          .catch((e) => console.error("Failed to fetch line items:", e)),
-      ),
-    ).finally(() => {
-      if (!active) return;
-      setItemsLoaded((prev) => {
-        const next = { ...prev };
-        for (const id of pending) next[id] = true;
-        return next;
-      });
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [expandedIds, itemsLoaded, receipts, financeService]);
-
-  // Effective data for a receipt. Edits are staged inside the panel's own
-  // draft; this is just the committed bill (or its freshly-loaded items).
-  const effectiveData = (bill: SavedBill): SavedBill => bill;
 
   // ── Upload → inject new bill at top ────────────────────────────────
   const handleUpload = useCallback(
@@ -327,7 +181,7 @@ export function ShoppingBillsPage() {
       const mapCurrency = (currency: string) => financeService.mapCurrency(currency);
       const bill = backendTransactionToSavedBill(saved, mapCurrency);
       setReceipts((previous) => [bill, ...previous].sort(compareNewestFirst));
-      setListRows((previous) => [transactionRowFromBill(bill), ...previous]);
+      setListRows((previous) => [saved, ...previous]);
       setBillDraft(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -338,11 +192,7 @@ export function ShoppingBillsPage() {
     }
   }, [billDraft, financeService]);
 
-  // ── Save-on-press commit (server-side, aggregate of PUT/PUT/DELETE) ───
-  // Fired once by BillReportPanel when the user presses "Save Refinements".
-  // Edits + staged item deletions are persisted here together; a DELETE is
-  // never issued outside of this save. Errors across the three call groups
-  // are aggregated by Promise.all (first failure wins).
+  // One complete Bill save owns header, item additions/edits/deletions and Matching.
   const handleSave = useCallback(
     async (bill: SavedBill, editedBill: ReceiptData) => {
       setSavingId(bill.id);
@@ -352,9 +202,8 @@ export function ShoppingBillsPage() {
           getToken({ template: "AspNetToken" }),
         );
 
-        // 1. Header fields — merchantName→Description, totalAmount→Amount,
-        // timestamp, currency; paymentMethod stays null for receipt bills.
-        await financeService.updateTransaction({
+        // One complete save returns bank-authoritative facts if this edit reconciles the Bill.
+        const saved = await financeService.updateTransaction({
           id: bill.id,
           type: "Expense",
           paymentMethodId: null,
@@ -366,92 +215,30 @@ export function ShoppingBillsPage() {
           additionalNotes: editedBill.additionalNotes ?? null,
           balanceAfter: null,
           dataOrigin: "Receipt",
-        });
-
-        const original = bill.items; // server-owned, carry ids
-        const incoming = editedBill.items;
-        const incomingById = new Map(
-          incoming.filter((i) => i.id).map((i) => [i.id, i]),
-        );
-
-        // 2. Parallel PUT for each edited line item that has a backend id.
-        const putOps = incoming
-          .filter((item) => item.id)
-          .map((item) =>
-            financeService.updateTransactionItem(item.id!, {
-              id: item.id!,
-              name: item.name,
-              fullName: item.fullName || item.name,
-              category: item.category ?? null,
-              subcategory: item.subcategory ?? null,
-              quantity: item.quantity,
-              pricePerUnit: item.unitPrice,
-              totalPrice: item.totalPrice,
-              origin: "ManualInput",
-            }),
-          );
-
-        // 3. Parallel DELETE for locally-deleted items (staged in the draft).
-        const deleteOps = original
-          .filter((origItem) => !!origItem.id && !incomingById.has(origItem.id))
-          .map((origItem) =>
-            financeService
-              .deleteTransactionItem(origItem.id!)
-              .then(() => true),
-          );
-
-        // 4. Parallel POST for freshly-added line items (no backend id yet).
-        const createOps = incoming
-          .filter((item) => !item.id)
-          .map((item) =>
-            financeService
-              .createTransactionItem(bill.id, {
-                name: item.name,
-                fullName: item.fullName || item.name,
-                category: item.category ?? null,
-                subcategory: item.subcategory ?? null,
-                quantity: item.quantity,
-                pricePerUnit: item.unitPrice,
-                totalPrice: item.totalPrice,
-              })
-              .then(() => true),
-          );
-
-        // Aggregate errors across the three call categories.
-        await Promise.all([...putOps, ...deleteOps, ...createOps]);
-
-        // 5. Refresh this bill from server so the panel shows committed data
-        //    (its own effect resets the staged draft on receiptData identity).
-        const backendItems = await financeService.getTransactionItems(bill.id);
-        if (!backendItems) return;
-        const withItems: SavedBill = {
-          ...bill,
-          merchantName: editedBill.merchantName,
-          timestamp: editedBill.timestamp,
-          totalAmount: editedBill.totalAmount,
-          currency: editedBill.currency,
-          additionalNotes: editedBill.additionalNotes,
-          items: backendItems.map((it) => ({
-            id: it.id ?? undefined,
-            name: it.name ?? "",
-            fullName: it.fullName ?? "",
-            quantity: Number(it.quantity),
-            unitPrice: Number(it.pricePerUnit),
-            totalPrice: Number(it.totalPrice),
-            category: it.category ?? undefined,
-            subcategory: it.subcategory ?? undefined,
+          items: editedBill.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            fullName: item.fullName || item.name,
+            category: item.category ?? null,
+            subcategory: item.subcategory ?? null,
+            quantity: item.quantity,
+            pricePerUnit: item.unitPrice,
+            totalPrice: item.totalPrice,
           })),
-        };
+        });
+        if (!saved) throw new Error("This Bill no longer exists.");
+        const withItems = backendTransactionToSavedBill(saved, (currency) => financeService.mapCurrency(currency));
 
         setReceipts((prev) =>
           prev
             .map((b) => (b.id === bill.id ? withItems : b))
             .sort(compareNewestFirst),
         );
-        setListRows((prev) => prev.map((row) => row.id === bill.id ? transactionRowFromBill(withItems) : row));
+        setListRows((prev) => prev.map((row) => row.id === bill.id ? saved : row));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setUploadError(message);
+        throw e; // Keep the panel's draft open when the complete save fails.
       } finally {
         setSavingId(null);
       }
@@ -462,8 +249,7 @@ export function ShoppingBillsPage() {
   // ── Remove transaction (top-level, immediate) ─────────────────────
   // Fired once by BillReportPanel when the user chooses "Remove" from the ⋮
   // menu (after a browser confirmation). Issues the transaction DELETE and
-  // drops the row — clearing any tracked expanded/loading state so no ghost
-  // entry can reappear. This is a top-level action, never staged behind Save.
+  // drops the row. This is a top-level action, never staged behind Save.
   const handleDelete = useCallback(
     async (id: string) => {
       setRemovingId(id);
@@ -474,8 +260,6 @@ export function ShoppingBillsPage() {
         // Drop the row and clear its auxiliary state so nothing lingers.
         setReceipts((prev) => prev.filter((b) => b.id !== id));
         setListRows((prev) => prev.filter((row) => row.id !== id));
-        setExpandedIds((prev) => stripKey(prev, id));
-        setItemsLoaded((prev) => stripKey(prev, id));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setUploadError(message);
@@ -570,13 +354,11 @@ export function ShoppingBillsPage() {
             renderRow={(row) => {
               const bill = receipts.find((candidate) => candidate.id === row.id);
               if (!bill) return null;
-              const isOpen = expandedIds[bill.id] ?? false;
               return <>
                 {removingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Removing...</div>}
                 {savingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Saving changes...</div>}
-                {isOpen && !itemsLoaded[bill.id] && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Loading line items...</div>}
                 <BillReportPanel
-                  receiptData={effectiveData(bill)}
+                  receiptData={bill}
                   badge={reconciliationBadge(bill)}
                   moneyDelta={moneyDeltaOf(bill)}
                   categories={categories}
@@ -584,7 +366,6 @@ export function ShoppingBillsPage() {
                   onDelete={(id) => handleDelete(id)}
                   currency={bill.currency}
                   expandable={true}
-                  onExpandChange={handleExpandChange(bill.id)}
                 />
               </>;
             }}

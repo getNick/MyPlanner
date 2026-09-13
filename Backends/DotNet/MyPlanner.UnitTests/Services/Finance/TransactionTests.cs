@@ -217,8 +217,8 @@ public class TransactionTests : FinanceServiceTests_Base
 
         var result = await _sut.UpdateTransactionAsync(_testUserId, updateModel);
 
-        Assert.That(result, Is.True);
-        var updated = await _testContext.Transactions.FindAsync(transaction.Id);
+        Assert.That(result, Is.Not.Null);
+        var updated = await _sut.GetTransactionAsync(transaction.Id, _testUserId);
         Assert.That(updated!.Amount, Is.EqualTo(150m));
     }
 
@@ -240,7 +240,7 @@ public class TransactionTests : FinanceServiceTests_Base
 
         var result = await _sut.UpdateTransactionAsync(_testUserId, updateModel);
 
-        Assert.That(result, Is.False);
+        Assert.That(result, Is.Null);
     }
 
     [Test]
@@ -345,7 +345,7 @@ public class TransactionTests : FinanceServiceTests_Base
 
         var result = await _sut.UpdateTransactionAsync(_testUserId, updateModel);
 
-        Assert.That(result, Is.False);
+        Assert.That(result, Is.Null);
     }
 
     [Test]

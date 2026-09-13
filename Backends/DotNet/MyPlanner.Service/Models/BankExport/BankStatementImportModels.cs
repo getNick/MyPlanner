@@ -41,11 +41,14 @@ public record BankStatementSummary(
 
 /// <summary>
 /// The outcome of a confirmed import: what the file said (<see cref="Summary"/>), how much of it
-/// was new, how much the ledger already had, and the transactions as stored — so the caller can
+/// was new, how much the ledger already had, how much of what was read turned out to be a purchase
+/// the household had already photographed (<see cref="ReconciledCount"/> — Bank Transactions merged
+/// into Bills by <strong>Matching</strong>), and the transactions as stored — so the caller can
 /// show them without a second read.
 /// </summary>
 public record BankStatementImportResult(
     BankStatementSummary Summary,
     int InsertedRowCount,
     int DuplicateRowCount,
+    int ReconciledCount,
     IReadOnlyList<Transaction> Transactions);

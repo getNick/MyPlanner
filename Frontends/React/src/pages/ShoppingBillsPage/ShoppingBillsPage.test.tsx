@@ -12,6 +12,10 @@ const mockGetReceiptCategories = jest.fn();
 const mockGetTransactionItems = jest.fn();
 const mockMapCurrency = jest.fn((c: string) => c);
 const mockDeleteTransaction = jest.fn();
+const mockUpdateTransaction = jest.fn();
+const mockUpdateItem = jest.fn();
+const mockCreateItem = jest.fn();
+const mockDeleteItem = jest.fn();
 
 // Return a STABLE getToken so the component's finance client (memoized on the
 // token) doesn't churn and re-trigger the initial load on every render.
@@ -27,6 +31,10 @@ jest.mock("../../services/FinanceService", () => {
     getTransactionItems = mockGetTransactionItems;
     mapCurrency = mockMapCurrency;
     deleteTransaction = mockDeleteTransaction;
+    updateTransaction = mockUpdateTransaction;
+    updateTransactionItem = mockUpdateItem;
+    createTransactionItem = mockCreateItem;
+    deleteTransactionItem = mockDeleteItem;
   }
   return { __esModule: true, default: MockFinanceService };
 });
@@ -79,6 +87,70 @@ describe("ShoppingBillsPage — reconciliation visibility", () => {
     expect(screen.getByText(/Money Delta.*2[.,]50/)).toBeTruthy();
     expect(screen.getByText("Provisional")).toBeTruthy();
     expect(screen.getByText(/No bank match · 8 days/)).toBeTruthy();
+  });
+});
+
+describe("ShoppingBillsPage — complete Bill save", () => {
+  it("saves the complete draft once and displays the surviving Reconciled Bill", async () => {
+    jest.clearAllMocks();
+    const item = {
+      id: "item-1", transactionId: "tx-1", name: "Coffee", fullName: "Coffee",
+      quantity: 1, pricePerUnit: 42.5, totalPrice: 42.5,
+      category: null, subcategory: null, origin: "ReceiptParsed",
+    };
+    mockGetTransactions.mockResolvedValue([{ ...SAMPLE_RECEIPT, items: [item] }]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockGetTransactionItems.mockResolvedValue([item]);
+    mockUpdateTransaction.mockResolvedValue({
+      ...SAMPLE_RECEIPT, dataOrigin: "Reconciled", amount: 42.5, moneyDelta: 2.5,
+      paymentMethodId: "pm-card", timestamp: "2024-05-01T10:45:00Z",
+      items: [{ ...item, pricePerUnit: 40, totalPrice: 40, origin: "ManualInput" }],
+    });
+
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("Coffee House")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Expand report"));
+    await screen.findByText("Coffee");
+    await waitFor(() => expect(screen.queryByText("Loading line items...")).toBeNull());
+    fireEvent.click(screen.getByTitle("More options"));
+    fireEvent.click(screen.getByText("Edit"));
+    const price = await screen.findByLabelText("Edit item 1 price");
+    fireEvent.change(price, { target: { value: "40" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(mockUpdateTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      id: "tx-1", amount: 40,
+      items: [expect.objectContaining({ id: "item-1", pricePerUnit: 40, totalPrice: 40 })],
+    })));
+    expect(mockUpdateTransaction).toHaveBeenCalledTimes(1);
+    expect(mockUpdateItem).not.toHaveBeenCalled();
+    expect(mockCreateItem).not.toHaveBeenCalled();
+    expect(mockDeleteItem).not.toHaveBeenCalled();
+    expect(await screen.findByText("Reconciled")).toBeTruthy();
+    expect(screen.getByText(/Money Delta.*2[.,]50/)).toBeTruthy();
+  });
+
+  it("keeps the complete draft editable when the atomic save fails", async () => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([SAMPLE_RECEIPT]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockUpdateTransaction.mockRejectedValue(new Error("Save failed"));
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("Coffee House")).toBeTruthy();
+    fireEvent.click(screen.getByTitle("More options"));
+    fireEvent.click(screen.getByText("Edit"));
+    fireEvent.change(screen.getByDisplayValue("Coffee House"), { target: { value: "Corrected merchant" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await screen.findAllByText("Save failed");
+    expect(screen.getByDisplayValue("Corrected merchant")).toBeTruthy();
+    expect(screen.getByText("Save")).toBeTruthy();
+    expect(mockUpdateTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      description: "Corrected merchant", amount: 0, items: [],
+    }));
+    expect(mockUpdateItem).not.toHaveBeenCalled();
+    expect(mockCreateItem).not.toHaveBeenCalled();
+    expect(mockDeleteItem).not.toHaveBeenCalled();
   });
 });
 

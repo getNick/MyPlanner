@@ -1,4 +1,5 @@
-﻿using MyPlanner.Data.Entities.Common;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using MyPlanner.Data.Entities.Common;
 
 namespace MyPlanner.Data.Entities.Finance;
 
@@ -32,6 +33,19 @@ public class Transaction : EntityBase
     public List<TransactionItem> Items { get; set; } = new();
     public DataOrigin DataOrigin { get; set; }
     public string? RawTransactionData { get; set; }
+
+    /// <summary>
+    /// <strong>Money Delta</strong>: the bank amount minus the sum of the Bill's Line Items — how much
+    /// of the purchase the paper failed to explain. Never stored: it is always derived from the two
+    /// things it compares, so editing Line Items widens it without any write, and the recorded bank
+    /// amount is untouched. Null for anything that is not a Reconciled row — a Provisional Bill has
+    /// no bank total to differ from. Reading it needs Line Items loaded, so the queries
+    /// <c>Include(t =&gt; t.Items)</c>.
+    /// </summary>
+    [NotMapped]
+    public decimal? MoneyDelta => DataOrigin == DataOrigin.Reconciled
+        ? Amount - Items.Sum(item => item.TotalPrice)
+        : null;
 }
 
 public enum TransactionType
@@ -46,4 +60,10 @@ public enum DataOrigin
     Bank,
     Manual,
     Receipt,
+
+    /// <summary>
+    /// A Bill that absorbed the Bank Transaction it matches: the bank figures are authoritative, the
+    /// Bill's Line Items survive. One purchase, one row.
+    /// </summary>
+    Reconciled,
 }

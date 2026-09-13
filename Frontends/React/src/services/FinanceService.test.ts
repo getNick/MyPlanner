@@ -55,6 +55,45 @@ describe("FinanceService.createTransactionItem", () => {
   });
 });
 
+describe("FinanceService.updateTransaction complete Bill contract", () => {
+  const draft = {
+    id: "tx-bill", type: "Expense" as const, paymentMethodId: null, toPaymentMethodId: null,
+    timestamp: "2026-09-01T12:00:00", amount: 20, currency: "UAH", description: "Merchant",
+    additionalNotes: null, balanceAfter: null, dataOrigin: "Receipt" as const,
+    items: [{ name: "Bread", fullName: "Bread", category: null, subcategory: null,
+      quantity: 1, pricePerUnit: 20, totalPrice: 20 }],
+  };
+
+  it("returns the surviving row from the existing PUT, not a success boolean", async () => {
+    const surviving = { ...draft, dataOrigin: "Reconciled", moneyDelta: 0, paymentMethodId: "pm-card" };
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(surviving), { status: 200 }),
+    );
+    try {
+      await expect(makeService().updateTransaction(draft)).resolves.toEqual(surviving);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain("/finance/transactions/tx-bill");
+      expect((init as RequestInit).method).toBe("PUT");
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual(draft);
+    } finally { fetchMock.mockRestore(); }
+  });
+
+  it("returns null when the Bill no longer exists", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
+    try { await expect(makeService().updateTransaction(draft)).resolves.toBeNull(); }
+    finally { fetchMock.mockRestore(); }
+  });
+
+  it("surfaces the Bill validation error without treating the draft as saved", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Line Item ID must belong to this Bill." }), { status: 400 }),
+    );
+    try {
+      await expect(makeService().updateTransaction(draft)).rejects.toThrow("Line Item ID must belong to this Bill.");
+    } finally { fetchMock.mockRestore(); }
+  });
+});
+
 describe("FinanceService.deleteTransactionItem", () => {
   let fetchMock: jest.SpyInstance;
 

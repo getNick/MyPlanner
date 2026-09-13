@@ -196,9 +196,21 @@ public class FinanceController : ControllerBase
 
         try
         {
-            var updated = await _financeService.UpdateTransactionAsync(userId, entity);
-            if (!updated) return NotFound();
-            return Ok();
+            var items = dto.Items?.Select(item => new TransactionItem
+            {
+                Id = item.Id ?? Guid.Empty,
+                TransactionId = id,
+                Name = item.Name,
+                FullName = item.FullName ?? item.Name,
+                Category = item.Category,
+                Subcategory = item.Subcategory,
+                Quantity = item.Quantity,
+                PricePerUnit = item.PricePerUnit,
+                TotalPrice = item.TotalPrice
+            }).ToArray();
+            var updated = await _financeService.UpdateTransactionAsync(userId, entity, items);
+            if (updated == null) return NotFound();
+            return Ok(updated);
         }
         catch (InvalidOperationException ex)
         {

@@ -364,12 +364,12 @@ export default class FinanceService {
   // ── Updates (save-on-press commit path) ───────────────────────────
 
   /**
-   * Persist header fields of a transaction via PUT /finance/transactions/{id}.
-   * Returns true on success, false when the server reports NotFound (404).
+   * Persist a complete Bill (items supplied) or legacy header-only transaction update.
+   * Returns the surviving stored row, including reconciliation, or null on NotFound.
    */
   public async updateTransaction(
     body: TransactionUpdateBody,
-  ): Promise<boolean> {
+  ): Promise<BackendTransaction | null> {
     try {
       const token = await this.getToken();
       const response = await fetch(
@@ -384,16 +384,16 @@ export default class FinanceService {
         },
       );
 
-      if (response.status === 404) return false;
+      if (response.status === 404) return null;
       if (!response.ok) {
         const problemDetails = await response.json().catch(() => null);
         throw new Error(
           `Failed to update transaction: ${response.status} ${response.statusText}` +
-            (problemDetails?.title ? ` — ${problemDetails.title}` : ""),
+            (problemDetails?.error || problemDetails?.title ? ` — ${problemDetails.error || problemDetails.title}` : ""),
         );
       }
 
-      return true;
+      return await response.json();
     } catch (error) {
       console.error(`Error updating transaction ${body.id}:`, error);
       throw error;

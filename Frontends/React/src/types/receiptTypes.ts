@@ -107,9 +107,8 @@ export interface TransactionItemCreateBody {
 /**
  * Body for PUT /finance/transactions/{id}.
  *
- * The backend's TransactionUpdateDto requires a full entity, so the client
- * reconstructs every field from the drafted receipt. For receipt bills the
- * payment method stays null (receipts are not tied to a wallet method).
+ * Supplied items are the complete Bill detail ([] clears it). Omitted items retain
+ * transitional header-only behaviour. Bank facts on Reconciled Bills are server-owned.
  */
 export interface TransactionUpdateBody {
   id: string; // Id — required by the backend update contract
@@ -122,7 +121,8 @@ export interface TransactionUpdateBody {
   description: string;
   additionalNotes: string | null;
   balanceAfter: number | null;
-  dataOrigin: BackendDataOrigin; // 'Receipt'
+  dataOrigin: BackendDataOrigin;
+  items?: Array<Omit<TransactionItemCreateBody, "origin"> & { id?: string }>;
 }
 
 /** Body for PUT /finance/transactions/items/{itemId}. */
