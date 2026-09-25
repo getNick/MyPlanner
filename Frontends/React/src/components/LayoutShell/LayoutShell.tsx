@@ -26,7 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "shopping-bills",
     label: "Shopping Bills",
-    path: "/shopping-bills",
+    path: "/finance/shopping-bills",
     icon: Receipt,
   },
 ];

@@ -12,6 +12,7 @@ import NotePage from "../../pages/NotePage/NotePage";
 import ProtectedRoute from "../ProtectedRoute/ProtectedRoute";
 import LayoutShell from "../LayoutShell/LayoutShell";
 import { TodoTimePage } from "../../pages/TodoTimePage/TodoTimePage";
+import { ShoppingBillsPage } from "../../pages/ShoppingBillsPage/ShoppingBillsPage";
 
 const App: React.FC = () => {
   const router = createBrowserRouter([
@@ -55,6 +56,10 @@ const App: React.FC = () => {
             return params.noteId;
           },
           element: <NotePage />,
+        },
+        {
+          path: "shopping-bills",
+          element: <ShoppingBillsPage />,
         },
       ],
     },
