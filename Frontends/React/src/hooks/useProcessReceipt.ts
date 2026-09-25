@@ -64,6 +64,8 @@ export function backendTransactionToSavedBill(
     additionalNotes: raw.additionalNotes ?? undefined,
     createdAt: raw.createdAt ?? "",
     tags: [],
+    dataOrigin: raw.dataOrigin,
+    moneyDelta: raw.moneyDelta,
     items: (raw.items || []).map((item) => ({
       id: item.id ?? undefined,
       name: item.name ?? "",

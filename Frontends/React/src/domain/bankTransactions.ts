@@ -1,15 +1,12 @@
 import type { BackendTransaction } from "../types/receiptTypes";
+import { paidThroughAStatement } from "./reconciliation";
+export { isBankTransaction } from "./reconciliation";
 
 /**
  * Which ledger rows a bank statement is answerable for, and in what order. `/finance/bank` lists through
  * these, so the page cannot invent its own idea of "a bank row" — the term comes from `CONTEXT.md`
  * (*Bank Transaction*: a Transaction whose `dataOrigin` is `Bank`).
  */
-
-/** A Bank Transaction: a row read from a statement. Bills and hand-typed rows are not. */
-export function isBankTransaction(row: BackendTransaction): boolean {
-  return row.dataOrigin === "Bank";
-}
 
 /**
  * Newest-first key. A statement always carries a timestamp (a row without a readable date is held
@@ -36,7 +33,7 @@ export function statementRowsFor(
   if (!paymentMethodId) return [];
 
   return rows
-    .filter((row) => isBankTransaction(row) && row.paymentMethodId === paymentMethodId)
+    .filter((row) => paidThroughAStatement(row) && row.paymentMethodId === paymentMethodId)
     .sort(compareNewestFirst);
 }
 

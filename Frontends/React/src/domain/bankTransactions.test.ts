@@ -26,6 +26,7 @@ function row(overrides: Partial<BackendTransaction>): BackendTransaction {
     additionalNotes: null,
     balanceAfter: null,
     dataOrigin: "Bank",
+    moneyDelta: null,
     rawTransactionData: null,
     items: [],
     ...overrides,
@@ -48,6 +49,13 @@ describe("statementRowsFor", () => {
   const silpo = row({ id: "tx-old", timestamp: "2026-07-01T09:09:25" });
   const savings = row({ id: "tx-other", paymentMethodId: "pm-save", description: "Mono save row" });
   const bill = row({ id: "tx-bill", dataOrigin: "Receipt", paymentMethodId: null, description: "Coffee House" });
+  const reconciled = row({
+    id: "tx-reconciled",
+    dataOrigin: "Reconciled",
+    timestamp: "2026-07-12T09:00:00",
+    description: "Merged Silpo",
+    moneyDelta: -1.5,
+  });
 
   it("orders newest first", () => {
     expect(statementRowsFor([silpo, salary], "pm-mono").map((r) => r.id)).toEqual([
@@ -56,9 +64,9 @@ describe("statementRowsFor", () => {
     ]);
   });
 
-  it("keeps only the chosen method's bank rows", () => {
-    const listed = statementRowsFor([silpo, savings, bill], "pm-mono");
-    expect(listed.map((r) => r.id)).toEqual(["tx-old"]);
+  it("keeps Bank and Reconciled rows for the chosen method, excluding Bills and other methods", () => {
+    const listed = statementRowsFor([silpo, savings, bill, reconciled], "pm-mono");
+    expect(listed.map((r) => r.id)).toEqual(["tx-reconciled", "tx-old"]);
   });
 
   it("lists nothing when no method is chosen", () => {

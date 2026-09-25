@@ -171,10 +171,15 @@ export default class FinanceService {
    * read the ledger" instead of implying an import inserted nothing, and every caller already
    * handles the exception. (`getPaymentMethods` set this precedent for the same reason.)
    */
-  public async getTransactions(): Promise<BackendTransaction[]> {
+  public async getTransactions(range?: { from: string | null; to: string | null }): Promise<BackendTransaction[]> {
     try {
       const token = await this.getToken();
-      const response = await fetch(`${this._baseUrl}finance/transactions`, {
+      const query = new URLSearchParams();
+      if (range?.from) query.set("startDate", `${range.from}T00:00:00`);
+      if (range?.to) query.set("endDate", `${range.to}T23:59:59.999`);
+      const queryString = query.toString();
+      const suffix = queryString ? `?${queryString}` : "";
+      const response = await fetch(`${this._baseUrl}finance/transactions${suffix}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
       });

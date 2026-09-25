@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, FileText, Landmark, Loader2, Upload } from "lucide-react";
 import FinanceService from "../../services/FinanceService";
+import TransactionList from "../../components/TransactionList/TransactionList";
 import type { BankStatementImportResult, BankStatementSummary } from "../../types/bankImportTypes";
 import {
   displayCurrency,
@@ -17,7 +18,7 @@ import type {
   BackendCurrency,
   BackendPaymentMethod,
 } from "../../types/paymentMethodTypes";
-import type { BackendTransaction, BackendTransactionType } from "../../types/receiptTypes";
+import type { BackendTransaction } from "../../types/receiptTypes";
 
 /**
  * `/finance/bank` — statement import. One page, one question: which account is this file for?
@@ -50,13 +51,6 @@ function formatStatementDate(iso: string): string {
   });
 }
 
-function formatStatementTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 const money = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -65,24 +59,6 @@ const money = new Intl.NumberFormat(undefined, {
 /** Money as money: grouped digits and the ISO 4217 spelling the ledger uses (EURO → EUR). */
 function formatMoney(value: number, currency: string): string {
   return `${money.format(value)} ${displayCurrency(currency as BackendCurrency)}`;
-}
-
-/** Just the figure, so the currency can sit beside it as the small uppercase tail. */
-function formatAmount(value: number): string {
-  return money.format(value);
-}
-
-/**
- * The amount signed by its backend-derived money role — never by reading the number for a hint, and
- * never by re-deriving the role from a sign. Only Income and Transfer are named: spend is what a
- * statement is mostly made of, and labelling it says nothing.
- */
-function rolePrefix(type: BackendTransactionType): string {
-  return type === "Expense" ? "−" : type === "Income" ? "+" : "";
-}
-
-function roleWord(type: BackendTransactionType): string | null {
-  return type === "Expense" ? null : type;
 }
 
 export const BankStatementsPage: React.FC = () => {
@@ -490,42 +466,14 @@ export const BankStatementsPage: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <ul aria-label="Bank transactions" className="flex flex-col gap-3 p-4">
-                    {statementRows.map((row) => (
-                      <li
-                        key={row.id}
-                        className="flex items-center justify-between gap-4 bg-slate-50 border border-slate-300 rounded-sm px-5 py-4"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <Landmark className="w-4 h-4 text-slate-500 shrink-0" />
-                          <span className="text-sm font-bold text-zinc-900 uppercase tracking-tight truncate">
-                            {row.description}
-                          </span>
-                          <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap shrink-0">
-                            {row.timestamp
-                              ? `${formatStatementDate(row.timestamp)} ${formatStatementTime(row.timestamp)}`
-                              : "no date on the statement"}
-                            {roleWord(row.type) ? ` · ${roleWord(row.type)}` : ""}
-                          </span>
-                        </div>
-                        <div className="shrink-0 text-right whitespace-nowrap">
-                          <span className="text-sm font-bold text-zinc-900 tabular-nums">
-                            {rolePrefix(row.type)}
-                            {formatAmount(row.amount)}{" "}
-                            <span className="text-[10px] font-semibold text-slate-500 uppercase">
-                              {displayCurrency(row.currency as BackendCurrency)}
-                            </span>
-                          </span>
-                          {carriesSeparateBaseAmount(row) && (
-                            // What the account was actually charged, in its own currency.
-                            <span className="mt-0.5 block text-[10px] text-slate-500 tabular-nums">
-                              card {formatMoney(Number(row.baseAmount), chosenTarget.currency)}
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <TransactionList
+                    transactions={statementRows}
+                    label="Bank transactions"
+                    paymentMethodName={() => chosenTarget.name}
+                    renderAmountDetail={(row) => carriesSeparateBaseAmount(row) ? (
+                      <span className="mt-0.5 block text-[10px] text-slate-500 tabular-nums">card {formatMoney(Number(row.baseAmount), chosenTarget.currency)}</span>
+                    ) : null}
+                  />
                 )}
               </section>
             )}

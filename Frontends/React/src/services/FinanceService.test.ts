@@ -10,6 +10,51 @@ function makeService(): FinanceService {
   return new FinanceService(async () => "tok");
 }
 
+describe("FinanceService.getTransactions date range", () => {
+  let fetchMock: jest.SpyInstance;
+  beforeEach(() => { fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response("[]", { status: 200 })); });
+  afterEach(() => fetchMock.mockRestore());
+
+  it("sends inclusive date bounds as transaction endpoint query parameters", async () => {
+    await makeService().getTransactions({ from: "2026-09-01", to: "2026-09-30" });
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.pathname).toContain("finance/transactions");
+    expect(url.searchParams.get("startDate")).toBe("2026-09-01T00:00:00");
+    expect(url.searchParams.get("endDate")).toBe("2026-09-30T23:59:59.999");
+  });
+});
+
+describe("FinanceService.createTransactionItem", () => {
+  it("sends the classification origin with the categorized TransactionItem", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(
+      new Response(null, { status: 201, headers: { Location: "http://localhost/transactions/items/item-1" } }),
+    );
+    try {
+      await makeService().createTransactionItem("tx-manual", {
+        name: "Cash groceries",
+        fullName: "Cash groceries",
+        category: "Groceries",
+        subcategory: "Pantry",
+        quantity: 1,
+        pricePerUnit: 42.5,
+        totalPrice: 42.5,
+        origin: "ManualInput",
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect((init as RequestInit).method).toBe("POST");
+      expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+        category: "Groceries",
+        subcategory: "Pantry",
+        origin: "ManualInput",
+        totalPrice: 42.5,
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+});
+
 describe("FinanceService.deleteTransactionItem", () => {
   let fetchMock: jest.SpyInstance;
 

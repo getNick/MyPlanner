@@ -35,7 +35,7 @@ export interface ReceiptData {
 
 export type BackendTransactionType = 'Expense' | 'Income' | 'Transfer';
 
-export type BackendDataOrigin = 'Bank' | 'Manual' | 'Receipt';
+export type BackendDataOrigin = 'Bank' | 'Manual' | 'Receipt' | 'Reconciled';
 
 export interface BackendTransaction {
   id: string;
@@ -56,6 +56,8 @@ export interface BackendTransaction {
   additionalNotes: string | null;
   balanceAfter: number | null;
   dataOrigin: BackendDataOrigin;
+  /** Backend-derived Money Delta; null unless the row is Reconciled. Never persisted. */
+  moneyDelta: number | null;
   rawTransactionData: string | null;
   createdAt?: string; // ISO date — fallback for sorting when timestamp is absent
   items: BackendTransactionItem[];
@@ -97,6 +99,7 @@ export interface TransactionItemCreateBody {
   quantity: number;
   pricePerUnit: number;
   totalPrice: number;
+  origin?: BackendTransactionItem["origin"];
 }
 
 // ── DTO types for API updates (save-on-press commit) ───────────────
@@ -144,4 +147,6 @@ export interface SavedBill extends ReceiptData {
   id: string;
   createdAt: string;
   tags: string[];
+  dataOrigin: BackendDataOrigin;
+  moneyDelta: number | null;
 }

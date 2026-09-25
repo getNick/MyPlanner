@@ -15,6 +15,16 @@ commits. A Bill is either **Provisional** (no bank row tied to it yet) or
 _Avoid_: Invoice, expense, transaction (a Bill is one kind of transaction; the
 generic backend entity is a Transaction).
 
+## Transaction
+
+The generic ledger record of money movement. A Transaction may originate from a Bank statement, a Bill, or manual entry; use the specific term (Bank Transaction, Bill, or Manual Transaction) when its origin matters. A Reconciled Bill and its Bank Transaction are one ledger Transaction, not two.
+_Avoid_: treating every Transaction as a Bill, or counting a Reconciled purchase twice.
+
+## Manual Transaction
+
+A ledger Transaction entered directly by a user rather than imported from a Bank statement or created from a shopping Bill. Manual entry records a description, amount, and Timestamp; it is not a Bill and does not have Bill Line Items.
+_Avoid_: using manual dashboard entry as a substitute for the Shopping Bills workflow.
+
 ## Merchant
 
 The vendor or store name printed on a Bill. Optional on input; falls back to

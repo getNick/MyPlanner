@@ -16,18 +16,26 @@ interface NavItem {
   label: string;
   path: string;
   icon: React.ElementType;
+  children?: NavItem[];
 }
 
 const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", path: "/", icon: LayoutDashboard },
   { id: "todo", label: "TODO", path: "/todo", icon: Clock },
-  { id: "finance", label: "Finance", path: "/finance", icon: TrendingUp },
-  { id: "bank", label: "Bank", path: "/finance/bank", icon: Landmark },
   {
-    id: "shopping-bills",
-    label: "Shopping Bills",
-    path: "/finance/shopping-bills",
-    icon: Receipt,
+    id: "finance",
+    label: "Finance",
+    path: "/finance",
+    icon: TrendingUp,
+    children: [
+      { id: "bank", label: "Bank", path: "/finance/bank", icon: Landmark },
+      {
+        id: "shopping-bills",
+        label: "Shopping Bills",
+        path: "/finance/shopping-bills",
+        icon: Receipt,
+      },
+    ],
   },
 ];
 
@@ -47,8 +55,38 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
   className = "",
 }) => {
   const { isLoaded, user } = useUser();
+  const { pathname } = useLocation();
   const isDrawer = variant === "drawer";
   const avatarSize = isDrawer ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+
+  const renderNavLink = (item: NavItem, isSubsection = false) => {
+    const Icon = item.icon;
+    const isAncestor = item.children && pathname.startsWith(`${item.path}/`);
+
+    return (
+      <NavLink
+        to={item.path}
+        end={Boolean(item.children) || isSubsection}
+        aria-label={item.label}
+        title={isDrawer ? undefined : isSubsection ? `Finance · ${item.label}` : item.label}
+        onClick={onClose}
+        className={({ isActive }) =>
+          `w-full flex items-center gap-2.5 px-3 py-2.5 rounded-sm font-mono no-underline transition-colors text-left ${
+            isSubsection ? "text-xs" : "text-sm"
+          } ${isDrawer ? "" : "justify-center lg:justify-start"} ${
+            isActive
+              ? "bg-zinc-100 text-zinc-950 font-bold border-l-2"
+              : `${isAncestor ? "text-zinc-100" : "text-zinc-400"} hover:text-zinc-100 hover:bg-zinc-900`
+          }`
+        }
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span className={`min-w-0 truncate ${isDrawer ? "" : "hidden lg:inline"}`}>
+          {item.label}
+        </span>
+      </NavLink>
+    );
+  };
 
   return (
     <aside
@@ -67,34 +105,25 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
       )}
 
       {/* Navigation scrolls independently of the account control. */}
-      <nav className="flex-1 min-h-0 py-4 overflow-y-auto">
+      <nav aria-label="Main navigation" className="flex-1 min-h-0 py-4 overflow-y-auto">
         <ul className="space-y-1 px-2">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <li key={item.id}>
-                <NavLink
-                  to={item.path}
-                  title={isDrawer ? undefined : item.label}
-                  onClick={onClose}
-                  className={({ isActive }) =>
-                    `w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-sm text-sm font-mono no-underline transition-colors text-left ${
-                      isDrawer ? "" : "justify-center lg:justify-start"
-                    } ${
-                      isActive
-                        ? "bg-zinc-100 text-zinc-950 font-bold border-l-2"
-                        : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
-                    }`
-                  }
+          {NAV_ITEMS.map((item) => (
+            <li key={item.id}>
+              {renderNavLink(item)}
+              {item.children && (
+                <ul
+                  aria-label={`${item.label} subsections`}
+                  className={`space-y-1 border-l border-zinc-700 ${
+                    isDrawer ? "ml-5 pl-2" : "ml-1 lg:ml-5 lg:pl-2"
+                  }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className={isDrawer ? "" : "hidden lg:inline"}>
-                    {item.label}
-                  </span>
-                </NavLink>
-              </li>
-            );
-          })}
+                  {item.children.map((child) => (
+                    <li key={child.id}>{renderNavLink(child, true)}</li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
         </ul>
       </nav>
 

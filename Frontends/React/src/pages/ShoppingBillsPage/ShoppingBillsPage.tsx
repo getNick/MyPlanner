@@ -1,13 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import UploadZone from "../../components/UploadZone/UploadZone";
 import BillReportPanel from "../../components/BillReportPanel/BillReportPanel";
+import TransactionList from "../../components/TransactionList/TransactionList";
 import FinanceService from "../../services/FinanceService";
 import { backendTransactionToSavedBill, processReceiptWithDetails } from "../../hooks/useProcessReceipt";
 import type {
+  BackendTransaction,
   Category,
   ReceiptData,
   SavedBill,
 } from "../../types/receiptTypes";
+import {
+  billsForReconciliation,
+  moneyDeltaOf,
+  provisionalBillAgeDays,
+  reconciliationLabel,
+} from "../../domain/reconciliation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 
@@ -44,11 +52,70 @@ function stripKey<T>(record: Record<string, T>, key: string): Record<string, T> 
   return next;
 }
 
+function transactionRowFromBill(bill: SavedBill): BackendTransaction {
+  return {
+    id: bill.id,
+    userId: "",
+    type: "Expense",
+    paymentMethodId: null,
+    toPaymentMethodId: null,
+    timestamp: bill.timestamp ?? null,
+    amount: bill.totalAmount,
+    currency: (bill.currency || "UAH") as BackendTransaction["currency"],
+    baseAmount: null,
+    description: bill.merchantName || "Receipt purchase",
+    additionalNotes: bill.additionalNotes ?? null,
+    balanceAfter: null,
+    dataOrigin: bill.dataOrigin,
+    moneyDelta: bill.moneyDelta,
+    rawTransactionData: null,
+    createdAt: bill.createdAt,
+    items: bill.items.map((item) => ({
+      id: item.id || "",
+      transactionId: bill.id,
+      name: item.name,
+      fullName: item.fullName || item.name,
+      category: item.category ?? null,
+      subcategory: item.subcategory ?? null,
+      quantity: item.quantity,
+      pricePerUnit: item.unitPrice,
+      totalPrice: item.totalPrice,
+      origin: "ManualInput",
+    })),
+  };
+}
+
+function reconciliationBadge(bill: SavedBill): React.ReactNode {
+  const label = reconciliationLabel(bill);
+  if (!label) return null;
+
+  const ageDays = provisionalBillAgeDays(bill);
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${
+          label === "Reconciled"
+            ? "bg-emerald-100 text-emerald-700"
+            : "bg-amber-100 text-amber-700"
+        }`}
+      >
+        {label}
+      </span>
+      {ageDays !== null && label === "Provisional" && (
+        <span className="text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+          No bank match · {ageDays} days
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Distinct line-item categories joined by " · ", or "—" when none exist.
 export function ShoppingBillsPage() {
   const { getToken } = useAuth();
 
   const [receipts, setReceipts] = useState<SavedBill[]>([]);
+  const [listRows, setListRows] = useState<BackendTransaction[]>([]);
 
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -113,7 +180,8 @@ export function ShoppingBillsPage() {
         setLoadError(null);
         const all = await financeService.getTransactions();
         if (!active) return;
-        const filtered = all.filter((t) => t.dataOrigin === "Receipt");
+        const filtered = billsForReconciliation(all);
+        setListRows(filtered);
         const mapped: SavedBill[] = filtered.map((t) => ({
           id: t.id,
           merchantName:
@@ -124,6 +192,8 @@ export function ShoppingBillsPage() {
           additionalNotes: t.additionalNotes ?? undefined,
           createdAt: t.createdAt || "",
           tags: [],
+          dataOrigin: t.dataOrigin,
+          moneyDelta: moneyDeltaOf(t),
           items: (t.items || []).map((it) => ({
             id: it.id ?? undefined,
             name: it.name ?? "",
@@ -180,6 +250,7 @@ export function ShoppingBillsPage() {
             }));
 
             if (!active) return;
+            setListRows((previous) => previous.map((row) => row.id === billId ? { ...row, items: backendItems } : row));
 
             // Merge fetched server items into the persisted bill.
             setReceipts((prev) =>
@@ -377,6 +448,7 @@ export function ShoppingBillsPage() {
             .map((b) => (b.id === bill.id ? withItems : b))
             .sort(compareNewestFirst),
         );
+        setListRows((prev) => prev.map((row) => row.id === bill.id ? transactionRowFromBill(withItems) : row));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setUploadError(message);
@@ -401,6 +473,7 @@ export function ShoppingBillsPage() {
 
         // Drop the row and clear its auxiliary state so nothing lingers.
         setReceipts((prev) => prev.filter((b) => b.id !== id));
+        setListRows((prev) => prev.filter((row) => row.id !== id));
         setExpandedIds((prev) => stripKey(prev, id));
         setItemsLoaded((prev) => stripKey(prev, id));
       } catch (e) {
@@ -490,58 +563,32 @@ export function ShoppingBillsPage() {
             </span>
           </div>
 
-          {/* Each bill is now a self-contained BillReportPanel card. The
-              panel owns its own collapse/expand; the parent only tracks which
-              rows are expanded to drive lazy item loading + per-row indicators. */}
-          {receipts.length === 0 ? (
-            <div className="px-5 py-16 text-center">
-              <p className="text-sm font-bold text-zinc-900 mb-1">
-                No shopping bills yet
-              </p>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Upload a receipt photo above to add your first bill. Anything
-                you change stays local until it is saved to the server.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 p-4">
-              {receipts.map((bill) => {
-                const isOpen = expandedIds[bill.id] ?? false;
-
-                return (
-                  <React.Fragment key={bill.id}>
-                    {removingId === bill.id && (
-                      <div className="flex items-center gap-2 text-xs text-slate-600">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Removing
-                        ...
-                      </div>
-                    )}
-                    {savingId === bill.id && (
-                      <div className="flex items-center gap-2 text-xs text-slate-600">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Saving
-                        changes...
-                      </div>
-                    )}
-                    {isOpen && !itemsLoaded[bill.id] && (
-                      <div className="flex items-center gap-2 text-xs text-slate-600">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Loading
-                        line items...
-                      </div>
-                    )}
-                    <BillReportPanel
-                      receiptData={effectiveData(bill)}
-                      categories={categories}
-                      onSave={(editedBill) => handleSave(bill, editedBill)}
-                      onDelete={(id) => handleDelete(id)}
-                      currency={bill.currency}
-                      expandable={true}
-                      onExpandChange={handleExpandChange(bill.id)}
-                    />
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          )}
+          <TransactionList
+            transactions={listRows}
+            label="Processed receipts"
+            emptyMessage="No shopping bills yet. Upload a receipt photo above to add your first bill."
+            renderRow={(row) => {
+              const bill = receipts.find((candidate) => candidate.id === row.id);
+              if (!bill) return null;
+              const isOpen = expandedIds[bill.id] ?? false;
+              return <>
+                {removingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Removing...</div>}
+                {savingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Saving changes...</div>}
+                {isOpen && !itemsLoaded[bill.id] && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Loading line items...</div>}
+                <BillReportPanel
+                  receiptData={effectiveData(bill)}
+                  badge={reconciliationBadge(bill)}
+                  moneyDelta={moneyDeltaOf(bill)}
+                  categories={categories}
+                  onSave={(editedBill) => handleSave(bill, editedBill)}
+                  onDelete={(id) => handleDelete(id)}
+                  currency={bill.currency}
+                  expandable={true}
+                  onExpandChange={handleExpandChange(bill.id)}
+                />
+              </>;
+            }}
+          />
         </div>
       </div>
     </div>

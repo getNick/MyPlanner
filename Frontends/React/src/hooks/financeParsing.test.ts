@@ -24,6 +24,7 @@ const sample: BackendTransaction = {
   baseAmount: null,
   balanceAfter: null,
   dataOrigin: "Receipt",
+  moneyDelta: null,
   rawTransactionData: null,
   createdAt: "2024-05-01T11:00:00Z",
   items: [

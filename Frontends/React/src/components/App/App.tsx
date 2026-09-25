@@ -10,6 +10,7 @@ import Home from "../../pages/Home/Home";
 import TodoListPage from "../../pages/TodoListPage/TodoListPage";
 import NotePage from "../../pages/NotePage/NotePage";
 import ProtectedRoute from "../ProtectedRoute/ProtectedRoute";
+import FinanceDashboardPage from "../../pages/FinanceDashboardPage/FinanceDashboardPage";
 import LayoutShell from "../LayoutShell/LayoutShell";
 import { TodoTimePage } from "../../pages/TodoTimePage/TodoTimePage";
 import { BankStatementsPage } from "../../pages/BankStatementsPage/BankStatementsPage";
@@ -60,17 +61,21 @@ const App: React.FC = () => {
           element: <NotePage />,
         },
         {
-          path: "bank",
+          path: "finance",
+          element: <FinanceDashboardPage />,
+        },
+        {
+          path: "finance/bank",
           element: <BankStatementsPage />,
         },
         {
           // Deliberately not in the sidebar: you come here to fix a method and go back to
-          // importing, so `/bank` links to it instead of it competing for a nav slot.
-          path: "payment-methods",
+          // importing, so `/finance/bank` links to it instead of it competing for a nav slot.
+          path: "finance/payment-methods",
           element: <PaymentMethodsPage />,
         },
         {
-          path: "shopping-bills",
+          path: "finance/shopping-bills",
           element: <ShoppingBillsPage />,
         },
       ],

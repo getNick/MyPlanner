@@ -1,0 +1,338 @@
+import React from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import FinanceDashboardPage from "./FinanceDashboardPage";
+import type { BackendTransaction } from "../../types/receiptTypes";
+
+const mockGetTransactions = jest.fn();
+const mockGetToken = jest.fn(async () => "token");
+const mockCreateTransaction = jest.fn();
+const mockCreateTransactionItem = jest.fn();
+const mockGetReceiptCategories = jest.fn();
+const mockDeleteTransaction = jest.fn();
+
+jest.mock("@clerk/clerk-react", () => ({ useAuth: () => ({ getToken: mockGetToken }) }));
+jest.mock("react-router-dom", () => ({
+  useNavigate: () => jest.fn(),
+  Link: ({ to, children, ...props }: any) => <a href={to} {...props}>{children}</a>,
+}));
+jest.mock("../../services/FinanceService", () => {
+  class MockFinanceService {
+    getTransactions = mockGetTransactions;
+    createTransaction = mockCreateTransaction;
+    createTransactionItem = mockCreateTransactionItem;
+    getReceiptCategories = mockGetReceiptCategories;
+    deleteTransaction = mockDeleteTransaction;
+    mapCurrency = (currency: string) => currency;
+  }
+  return { __esModule: true, default: MockFinanceService };
+});
+
+const tx = (overrides: Partial<BackendTransaction> = {}): BackendTransaction => ({
+  id: "tx-market",
+  userId: "user-1",
+  type: "Expense",
+  paymentMethodId: null,
+  toPaymentMethodId: null,
+  timestamp: "2026-04-03T10:30:00Z",
+  amount: 75,
+  currency: "UAH",
+  baseAmount: null,
+  description: "Market purchase",
+  additionalNotes: null,
+  balanceAfter: null,
+  dataOrigin: "Receipt",
+  moneyDelta: null,
+  rawTransactionData: null,
+  items: [{ id: "item-1", transactionId: "tx-market", name: "Apples", fullName: "Apples", category: "Groceries", subcategory: "Fruit", quantity: 3, pricePerUnit: 25, totalPrice: 75, origin: "ReceiptParsed" }],
+  ...overrides,
+});
+
+describe("FinanceDashboardPage", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([tx()]);
+    mockCreateTransaction.mockResolvedValue("tx-manual");
+    mockCreateTransactionItem.mockResolvedValue("item-manual");
+    mockGetReceiptCategories.mockResolvedValue([
+      { name: "Groceries", subcategories: ["Pantry", "Produce"] },
+      { name: "Transport", subcategories: ["Taxi"] },
+    ]);
+  });
+
+  it("shows analytics followed by searchable, filterable finance transactions", async () => {
+    render(<FinanceDashboardPage />);
+
+    expect(screen.getByText("Aggregate Expenditure")).toBeTruthy();
+    expect(screen.getByText("Spending Trend")).toBeTruthy();
+    expect(screen.getByText(/Interactive Budget Breakdown & Drilldown/)).toBeTruthy();
+    expect(screen.queryByText("Health & Welfare Desk")).toBeNull();
+    expect(screen.queryByText("Stored Transactions Archive")).toBeNull();
+
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(section).findByText("Market purchase");
+    expect(screen.getByText("Interactive Budget Breakdown & Drilldown").compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const search = within(section).getByRole("textbox", { name: "Search transactions" });
+    fireEvent.change(search, { target: { value: "not found" } });
+    expect(await within(section).findByText(/No matching transactions found/)).toBeTruthy();
+    fireEvent.change(search, { target: { value: "market" } });
+    expect(await within(section).findByText("Market purchase")).toBeTruthy();
+
+    for (const filter of ["All", "Alcohol", "Junk Food", ">$50"]) {
+      expect(within(section).getByRole("button", { name: filter })).toBeTruthy();
+    }
+  });
+
+  it("defaults to local month-to-date and reloads all dashboard data for either changed bound", async () => {
+    const today = "2026-04-15";
+    const firstOfMonth = "2026-04-01";
+    const changedFrom = "2026-04-14";
+    const changedTo = "2026-04-16";
+    const earlier = tx({
+      id: "tx-earlier",
+      description: "Yesterday purchase",
+      timestamp: `${changedFrom}T10:30:00`,
+      amount: 20,
+      items: [{ id: "item-housing", transactionId: "tx-earlier", name: "Rent", fullName: "Rent", category: "Housing", subcategory: "Rent", quantity: 1, pricePerUnit: 20, totalPrice: 20, origin: "ReceiptParsed" }],
+    });
+    mockGetTransactions.mockReset();
+    mockGetTransactions
+      .mockResolvedValueOnce([tx({ timestamp: `${today}T10:30:00` })])
+      .mockResolvedValueOnce([tx({ timestamp: `${today}T10:30:00` }), earlier])
+      .mockResolvedValueOnce([tx({ timestamp: `${today}T10:30:00` }), earlier]);
+
+    jest.useFakeTimers("modern");
+    jest.setSystemTime(new Date(2026, 3, 15, 12));
+    render(<FinanceDashboardPage />);
+    jest.useRealTimers();
+    const from = screen.getByLabelText("Report start date") as HTMLInputElement;
+    const to = screen.getByLabelText("Report end date") as HTMLInputElement;
+    expect(from.value).toBe(firstOfMonth);
+    expect(to.value).toBe(today);
+
+    const transactions = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(transactions).findByText("Market purchase");
+    await waitFor(() => expect(screen.getByText("Aggregate Expenditure").parentElement?.textContent).toContain("75.00 UAH"));
+    expect(screen.getAllByText("Groceries").length).toBeGreaterThan(0);
+    expect(screen.getByText("04-15")).toBeTruthy();
+    expect(mockGetTransactions).toHaveBeenLastCalledWith({ from: firstOfMonth, to: today });
+
+    fireEvent.change(from, { target: { value: changedFrom } });
+    await waitFor(() => expect(mockGetTransactions).toHaveBeenLastCalledWith({ from: changedFrom, to: today }));
+    expect(within(transactions).getByText("Market purchase")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Aggregate Expenditure").parentElement?.textContent).toContain("95.00 UAH"));
+    expect(within(transactions).getByText("Yesterday purchase")).toBeTruthy();
+    expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
+    expect(screen.getByText("04-14")).toBeTruthy();
+
+    fireEvent.change(to, { target: { value: changedTo } });
+    await waitFor(() => expect(mockGetTransactions).toHaveBeenLastCalledWith({ from: changedFrom, to: changedTo }));
+    await waitFor(() => expect(screen.getByText("Aggregate Expenditure").parentElement?.textContent).toContain("95.00 UAH"));
+    expect(within(transactions).getByText("Market purchase")).toBeTruthy();
+    expect(screen.getAllByText("Groceries").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Housing").length).toBeGreaterThan(0);
+  });
+
+  it("offers upload routes before manual entry with paired classification fields", async () => {
+    render(<FinanceDashboardPage />);
+    const transactions = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(transactions).findByText("Market purchase");
+    fireEvent.click(within(transactions).getByRole("button", { name: /add transaction/i }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Add Transaction" })).toBeTruthy();
+    const uploadSection = within(dialog).getByRole("region", { name: "Upload" });
+    expect(within(uploadSection).getByRole("link", { name: "Bank statement" }).getAttribute("href")).toBe("/finance/bank");
+    expect(within(uploadSection).getByRole("link", { name: "Shopping Bill" }).getAttribute("href")).toBe("/finance/shopping-bills");
+
+    const manualDivider = within(dialog).getByText("Or enter manually");
+    const description = within(dialog).getByLabelText("Description");
+    expect(uploadSection.compareDocumentPosition(manualDivider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(manualDivider.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const classification = within(dialog).getByRole("group", { name: "Category and Subcategory" });
+    expect(within(classification).getByLabelText("Category")).toBeTruthy();
+    expect(within(classification).getByLabelText("Subcategory")).toBeTruthy();
+    expect(classification.className).toContain("sm:grid-cols-2");
+  });
+
+  it("creates a manual transaction, refreshes the visible ledger, and links to existing import flows", async () => {
+    const manual = tx({
+      id: "tx-manual",
+      description: "Taxi home",
+      amount: 42.5,
+      dataOrigin: "Manual",
+      timestamp: "2026-04-08T17:45:00.000Z",
+      items: [{
+        id: "item-manual",
+        transactionId: "tx-manual",
+        name: "Taxi home",
+        fullName: "Taxi home",
+        category: "Transport",
+        subcategory: "Taxi",
+        quantity: 1,
+        pricePerUnit: 42.5,
+        totalPrice: 42.5,
+        origin: "ManualInput",
+      }],
+    });
+    mockCreateTransaction.mockResolvedValueOnce("tx-manual");
+    mockGetTransactions
+      .mockResolvedValueOnce([tx()])
+      .mockResolvedValueOnce([tx(), manual]);
+
+    jest.useFakeTimers("modern");
+    jest.setSystemTime(new Date(2026, 3, 15, 12));
+    render(<FinanceDashboardPage />);
+    jest.useRealTimers();
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(section).findByText("Market purchase");
+    fireEvent.click(within(section).getByRole("button", { name: /add transaction/i }));
+
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Taxi home" } });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "42.50" } });
+    fireEvent.change(screen.getByLabelText("Timestamp"), { target: { value: "2026-04-08T20:45" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Transport" } });
+    fireEvent.change(screen.getByLabelText("Subcategory"), { target: { value: "Taxi" } });
+    expect(screen.getByRole("link", { name: /bank/i }).getAttribute("href")).toBe("/finance/bank");
+    expect(screen.getByRole("link", { name: "Shopping Bill" }).getAttribute("href")).toBe("/finance/shopping-bills");
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    await waitFor(() => expect(mockCreateTransaction).toHaveBeenCalledWith({
+      type: "Expense",
+      paymentMethodId: null,
+      timestamp: "2026-04-08T17:45:00.000Z",
+      amount: 42.5,
+      currency: "UAH",
+      description: "Taxi home",
+      additionalNotes: null,
+      dataOrigin: "Manual",
+    }));
+    await waitFor(() => expect(mockCreateTransactionItem).toHaveBeenCalledWith("tx-manual", expect.objectContaining({
+      category: "Transport",
+      subcategory: "Taxi",
+      totalPrice: 42.5,
+      origin: "ManualInput",
+    })));
+    expect(await within(section).findByText("Taxi home")).toBeTruthy();
+    expect(screen.getByText("Aggregate Expenditure").parentElement?.textContent).toContain("117.50 UAH");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("saves a categorized Manual Transaction and charts it by Category and Subcategory without exposing its classification as detail", async () => {
+    const manual = tx({
+      id: "tx-manual",
+      description: "Cash groceries",
+      amount: 42.5,
+      dataOrigin: "Manual",
+      items: [{
+        id: "item-manual",
+        transactionId: "tx-manual",
+        name: "Cash groceries",
+        fullName: "Cash groceries",
+        category: "Groceries",
+        subcategory: "Pantry",
+        quantity: 1,
+        pricePerUnit: 42.5,
+        totalPrice: 42.5,
+        origin: "ManualInput",
+      }],
+    });
+    mockGetTransactions
+      .mockResolvedValueOnce([tx()])
+      .mockResolvedValueOnce([tx(), manual]);
+
+    jest.useFakeTimers("modern");
+    jest.setSystemTime(new Date(2026, 3, 15, 12));
+    render(<FinanceDashboardPage />);
+    jest.useRealTimers();
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(section).findByText("Market purchase");
+    fireEvent.click(within(section).getByRole("button", { name: /add transaction/i }));
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Cash groceries" } });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "42.50" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Groceries" } });
+    fireEvent.change(screen.getByLabelText("Subcategory"), { target: { value: "Pantry" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    await waitFor(() => expect(mockCreateTransactionItem).toHaveBeenCalledWith("tx-manual", {
+      name: "Cash groceries",
+      fullName: "Cash groceries",
+      category: "Groceries",
+      subcategory: "Pantry",
+      quantity: 1,
+      pricePerUnit: 42.5,
+      totalPrice: 42.5,
+      origin: "ManualInput",
+    }));
+    expect(await within(section).findByText("Cash groceries")).toBeTruthy();
+    expect(screen.getAllByText("Groceries").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /groceries/i }));
+    const pantry = screen.getByRole("button", { name: /pantry/i });
+    expect((pantry as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/1x Cash groceries/)).toBeNull();
+    expect(within(section).queryByRole("button", { name: /cash groceries/i })).toBeNull();
+  });
+
+  it("keeps the manual transaction draft and shows an actionable error when creation fails", async () => {
+    mockCreateTransaction.mockRejectedValueOnce(new Error("Network unavailable"));
+    const error = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<FinanceDashboardPage />);
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(section).findByText("Market purchase");
+    fireEvent.click(within(section).getByRole("button", { name: /add transaction/i }));
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Taxi home" } });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "42.50" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Groceries" } });
+    fireEvent.change(screen.getByLabelText("Subcategory"), { target: { value: "Pantry" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    expect(await screen.findByText(/could not save transaction/i)).toBeTruthy();
+    expect((screen.getByLabelText("Description") as HTMLInputElement).value).toBe("Taxi home");
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("42.50");
+    expect(within(section).queryByText("Taxi home")).toBeNull();
+    error.mockRestore();
+  });
+
+  it("rolls back the Manual Transaction when its classification item cannot be saved", async () => {
+    mockCreateTransactionItem.mockRejectedValueOnce(new Error("item save failed"));
+    const error = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<FinanceDashboardPage />);
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    await within(section).findByText("Market purchase");
+    fireEvent.click(within(section).getByRole("button", { name: /add transaction/i }));
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Cash groceries" } });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "42.50" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Groceries" } });
+    fireEvent.change(screen.getByLabelText("Subcategory"), { target: { value: "Pantry" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    expect(await screen.findByText(/could not save transaction and its category/i)).toBeTruthy();
+    expect(mockDeleteTransaction).toHaveBeenCalledWith("tx-manual");
+    expect(within(section).queryByText("Cash groceries")).toBeNull();
+    expect((screen.getByLabelText("Category") as HTMLSelectElement).value).toBe("Groceries");
+    error.mockRestore();
+  });
+
+  it("confirms before deleting and keeps the row visible when deletion fails", async () => {
+    mockDeleteTransaction.mockRejectedValue(new Error("delete failed"));
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(false);
+    const error = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<FinanceDashboardPage />);
+
+    const section = screen.getByRole("region", { name: "Finance Transactions" });
+    const deleteButton = await within(section).findByRole("button", { name: "Delete" });
+    fireEvent.click(deleteButton);
+    expect(confirm).toHaveBeenCalled();
+    expect(mockDeleteTransaction).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(deleteButton);
+    await waitFor(() => expect(mockDeleteTransaction).toHaveBeenCalledWith("tx-market"));
+    expect(within(section).getByText("Market purchase")).toBeTruthy();
+
+    confirm.mockRestore();
+    error.mockRestore();
+  });
+});

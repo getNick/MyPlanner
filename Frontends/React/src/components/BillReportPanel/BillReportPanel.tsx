@@ -270,6 +270,7 @@ export default function BillReportPanel({
               <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap shrink-0">
                 {formatReceiptDateTime(receiptData.timestamp)}
               </span>
+              {badge && <span className="shrink-0">{badge}</span>}
             </>
           )}
 
@@ -352,12 +353,24 @@ export default function BillReportPanel({
           {/* Normal mode: the amount sits left of the expand toggle, with the
               ⋮ menu at the far edge. */}
           {!editMode && (
-            <span className="text-sm font-bold text-zinc-900 tabular-nums whitespace-nowrap shrink-0 text-right">
-              {amountText}{" "}
-              <span className="text-[10px] font-semibold text-slate-500 uppercase">
-                {currencyText || ""}
+            <div className="shrink-0 text-right">
+              <span className="text-sm font-bold text-zinc-900 tabular-nums whitespace-nowrap">
+                {amountText}{" "}
+                <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                  {currencyText || ""}
+                </span>
               </span>
-            </span>
+              {moneyDelta !== null && moneyDelta !== undefined && (
+                <span className="block text-[10px] font-semibold text-amber-700 tabular-nums whitespace-nowrap">
+                  Money Delta ·{" "}
+                  {moneyDelta.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  {currencyText || ""}
+                </span>
+              )}
+            </div>
           )}
 
           {hasUnsavedEdits && (

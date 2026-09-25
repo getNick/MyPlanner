@@ -7,6 +7,12 @@ app's only real job is to tie those two documents together so you can trust the 
 The visible payoff is understanding food spending — where it goes, which market, what
 it actually cost — inside a ledger that covers all spending.
 
+## Workflow boundaries
+
+- The Finance Dashboard is the cross-origin overview and ledger: its date range applies to dashboard summaries, charts, breakdowns, and listed Transactions consistently. Date bounds include both selected calendar days; records without a Timestamp follow the established report behavior.
+- Manual Transaction entry is for recording money movement without a receipt or Bank import. It records a description, amount, and Timestamp; a successful save must be reflected in the ledger, while a failed save must remain recoverable and must not look saved.
+- Use the existing Bank workflow for statement imports and the Shopping Bills workflow for receipt/Bill capture and Line Items. Dashboard actions may link to these workflows but should not duplicate them or turn the manual Transaction form into a Bill editor.
+
 ---
 
 ## The core problem

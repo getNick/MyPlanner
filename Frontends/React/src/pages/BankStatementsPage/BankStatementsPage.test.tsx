@@ -124,6 +124,13 @@ const SAVINGS_ROW = { ...SILPO, id: "tx-save-row", paymentMethodId: SAVINGS.id, 
 
 // A Bill lives on /shopping-bills; a bank list must not show it even when it shares the period.
 const BILL = { ...SILPO, id: "tx-bill", dataOrigin: "Receipt", paymentMethodId: null, description: "Coffee House" };
+const RECONCILED = {
+  ...SILPO,
+  id: "tx-reconciled",
+  dataOrigin: "Reconciled",
+  description: "Silpo with receipt",
+  moneyDelta: 3.25,
+};
 
 /** The ledger list's rows, in the order the page shows them. */
 function bankRows(): string[] {
@@ -360,6 +367,17 @@ describe("BankStatementsPage", () => {
     // A Bill is not a bank row, and another account's rows stay out of this list.
     expect(screen.getByRole("list", { name: "Bank transactions" }).textContent).not.toContain("Coffee House");
     expect(screen.getByRole("list", { name: "Bank transactions" }).textContent).not.toContain("Deposit");
+  });
+
+  it("lists a Reconciled purchase once with its state and Money Delta", async () => {
+    mockGetTransactions.mockResolvedValue([RECONCILED]);
+    await renderView();
+
+    fireEvent.change(importTarget(), { target: { value: MONO_CARD.id } });
+
+    await waitFor(() => expect(bankRows()).toHaveLength(1));
+    expect(bankRows()[0]).toContain("Reconciled");
+    expect(bankRows()[0]).toMatch(/Money Delta.*3[.,]25/);
   });
 
   it("prints the card-currency figure beside a foreign-currency amount", async () => {

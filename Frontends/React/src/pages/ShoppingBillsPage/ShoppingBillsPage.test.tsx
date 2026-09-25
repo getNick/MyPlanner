@@ -49,6 +49,39 @@ const SAMPLE_RECEIPT = {
   items: [],
 } as unknown as Record<string, unknown>;
 
+describe("ShoppingBillsPage — reconciliation visibility", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+    mockGetTransactions.mockResolvedValue([
+      { ...SAMPLE_RECEIPT, id: "tx-provisional", timestamp: daysAgo(8) },
+      {
+        ...SAMPLE_RECEIPT,
+        id: "tx-reconciled",
+        description: "Silpo",
+        timestamp: daysAgo(2),
+        paymentMethodId: "pm-mono",
+        dataOrigin: "Reconciled",
+        moneyDelta: 2.5,
+      },
+    ]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockGetTransactionItems.mockResolvedValue([]);
+    mockDeleteTransaction.mockResolvedValue(true);
+  });
+
+  it("lists a Reconciled purchase once with its Money Delta and labels the unmatched Bill with age", async () => {
+    render(<ShoppingBillsPage />);
+
+    expect(await screen.findByText("Silpo")).toBeTruthy();
+    expect(screen.getAllByText("Silpo")).toHaveLength(1);
+    expect(screen.getByText("Reconciled")).toBeTruthy();
+    expect(screen.getByText(/Money Delta.*2[.,]50/)).toBeTruthy();
+    expect(screen.getByText("Provisional")).toBeTruthy();
+    expect(screen.getByText(/No bank match · 8 days/)).toBeTruthy();
+  });
+});
+
 describe("ShoppingBillsPage — remove transaction", () => {
   beforeEach(() => {
     jest.clearAllMocks();
