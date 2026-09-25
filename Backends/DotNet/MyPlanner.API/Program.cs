@@ -5,12 +5,14 @@ using MyPlanner.Data.DBContexts;
 using MyPlanner.Data.UnitOfWork;
 using Microsoft.Extensions.Options;
 using MyPlanner.Service;
+using MyPlanner.Service.Interfaces;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using MyPlanner.API;
 using MyPlanner.API.ExceptionHandlers;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
 
 // Load .env file for local development (environment variables override appsettings.json)
 DotEnv.Load();
@@ -26,7 +28,11 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddControllers();
+// Serialize enums as their names (e.g. DataOrigin.Receipt, not 2) so the
+// frontend contract stays stable regardless of enum ordering.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, context, cancellationToken) =>
@@ -111,4 +117,6 @@ void ConfigureServices(IServiceCollection services)
     // Register LlmSettings as typed options from configuration
     services.Configure<MyPlanner.Service.Models.LlmSettings>(builder.Configuration.GetSection("LlmSettings"));
     services.AddScoped<ILlmService, LlmService>();
+    services.AddScoped<IFinanceService, FinanceService>();
+
 }
