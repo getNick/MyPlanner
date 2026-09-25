@@ -11,6 +11,7 @@ import TodoListPage from "../../pages/TodoListPage/TodoListPage";
 import NotePage from "../../pages/NotePage/NotePage";
 import ProtectedRoute from "../ProtectedRoute/ProtectedRoute";
 import LayoutShell from "../LayoutShell/LayoutShell";
+import { TodoTimePage } from "../../pages/TodoTimePage/TodoTimePage";
 
 const App: React.FC = () => {
   const router = createBrowserRouter([
@@ -29,6 +30,10 @@ const App: React.FC = () => {
         {
           index: true,
           element: <Home />,
+        },
+        {
+          path: "todo",
+          element: <TodoTimePage />,
         },
         {
           path: "list/:listId",
