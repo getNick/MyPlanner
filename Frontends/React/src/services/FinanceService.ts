@@ -1,4 +1,8 @@
 import {
+  BankStatementImportResult,
+  BankStatementSummary,
+} from "../types/bankImportTypes";
+import {
   BackendTransaction,
   BackendTransactionItem,
   ReceiptData,
@@ -7,6 +11,12 @@ import {
   TransactionUpdateBody,
   TransactionItemUpdateBody,
 } from "../types/receiptTypes";
+import type {
+  BackendPaymentMethod,
+  PaymentMethodCreateBody,
+  PaymentMethodDeletion,
+  PaymentMethodUpdateBody,
+} from "../types/paymentMethodTypes";
 
 export default class FinanceService {
   private _baseUrl: string = process.env.REACT_APP_API_URL ?? "http://localhost:5206/api/";
@@ -31,8 +41,136 @@ export default class FinanceService {
     }
   }
 
+  // ── Payment Methods ──────────────────────────────────────────────
+
+  /**
+   * Unlike the transaction list, a failed read throws instead of returning [].
+   * "No payment methods" and "could not read payment methods" look identical on
+   * screen otherwise, and an empty-looking ledger is the wrong thing to imply.
+   */
+  public async getPaymentMethods(): Promise<BackendPaymentMethod[]> {
+    try {
+      const token = await this.getToken();
+      const response = await fetch(`${this._baseUrl}finance/payment-methods`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch payment methods: ${response.status} ${response.statusText}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+      throw error;
+    }
+  }
+
+  /** Creates the method. Resolves when the server accepted it; throws when it did not. */
+  public async createPaymentMethod(body: PaymentMethodCreateBody): Promise<void> {
+    try {
+      const token = await this.getToken();
+      const response = await fetch(`${this._baseUrl}finance/payment-methods`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const problemDetails = await response.json().catch(() => null);
+        throw new Error(
+          `Failed to create payment method: ${response.status} ${response.statusText}` +
+            (problemDetails?.title ? ` — ${problemDetails.title}` : "")
+        );
+      }
+    } catch (error) {
+      console.error("Error creating payment method:", error);
+      throw error;
+    }
+  }
+
+  /** Returns false when the server reports the method is gone (404). */
+  public async updatePaymentMethod(body: PaymentMethodUpdateBody): Promise<boolean> {
+    try {
+      const token = await this.getToken();
+      const response = await fetch(
+        `${this._baseUrl}finance/payment-methods/${body.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (response.status === 404) return false;
+      if (!response.ok) {
+        const problemDetails = await response.json().catch(() => null);
+        throw new Error(
+          `Failed to update payment method: ${response.status} ${response.statusText}` +
+            (problemDetails?.title ? ` — ${problemDetails.title}` : "")
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`Error updating payment method ${body.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a payment method. A refusal is returned as data (`in-use` with the
+   * server's transaction count), never thrown: money in use is not removed, and
+   * the caller has to explain why. Only transport/server faults throw.
+   */
+  public async deletePaymentMethod(id: string): Promise<PaymentMethodDeletion> {
+    try {
+      const token = await this.getToken();
+      const response = await fetch(`${this._baseUrl}finance/payment-methods/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 204) return { status: "deleted" };
+      if (response.status === 404) return { status: "not-found" };
+
+      if (response.status === 409) {
+        const payload = await response.json().catch(() => null);
+        return {
+          status: "in-use",
+          transactionCount:
+            typeof payload?.transactionCount === "number" ? payload.transactionCount : null,
+          explanation: typeof payload?.error === "string" ? payload.error : null,
+        };
+      }
+
+      throw new Error(
+        `Failed to delete payment method: ${response.status} ${response.statusText}`
+      );
+    } catch (error) {
+      console.error(`Error deleting payment method ${id}:`, error);
+      throw error;
+    }
+  }
+
   // ── Transactions ────────────────────────────────────────────────────
 
+  /**
+   * The household's whole ledger.
+   *
+   * A failed read throws rather than answering with `[]`: `/finance/bank` has to be able to say "could not
+   * read the ledger" instead of implying an import inserted nothing, and every caller already
+   * handles the exception. (`getPaymentMethods` set this precedent for the same reason.)
+   */
   public async getTransactions(): Promise<BackendTransaction[]> {
     try {
       const token = await this.getToken();
@@ -50,7 +188,7 @@ export default class FinanceService {
       return await response.json();
     } catch (error) {
       console.error("Error fetching transactions:", error);
-      return [];
+      throw error;
     }
   }
 
@@ -322,6 +460,61 @@ export default class FinanceService {
         const errPayload = await response.json().catch(() => ({}));
         throw new Error(errPayload.error || `HTTP error ${response.status} ${response.statusText}`);
       }
+      return await response.json();
+    } catch (error) {
+      console.error(`Error in ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  // ── Bank Statement Import ──────────────────────────────────────────
+
+  /**
+   * Reads a statement for the chosen payment method and says what it holds — row count, date
+   * span, rows needing review — without storing anything. The confirmation step; the caller keeps
+   * the File between the two calls.
+   */
+  public async previewBankingFile(
+    paymentMethodId: string,
+    file: File
+  ): Promise<BankStatementSummary> {
+    return this.postBankingStatement("banking-files/preview", paymentMethodId, file);
+  }
+
+  /** Inserts a confirmed statement. Refusals mirror the preview's and throw with the server's reason. */
+  public async importBankingFile(
+    paymentMethodId: string,
+    file: File
+  ): Promise<BankStatementImportResult> {
+    return this.postBankingStatement("banking-files", paymentMethodId, file);
+  }
+
+  private async postBankingStatement(
+    endpoint: string,
+    paymentMethodId: string,
+    file: File
+  ): Promise<any> {
+    try {
+      const token = await this.getToken();
+      const formData = new FormData();
+      formData.append("paymentMethodId", paymentMethodId);
+      formData.append("file", file);
+
+      const response = await fetch(`${this._baseUrl}finance/${endpoint}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        // The refusal reason is the payload's whole point — "no bank set", "not a CSV statement" —
+        // so it is rethrown as the message, not swallowed into a status code.
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(
+          errPayload.error || `HTTP error ${response.status} ${response.statusText}`
+        );
+      }
+
       return await response.json();
     } catch (error) {
       console.error(`Error in ${endpoint}:`, error);

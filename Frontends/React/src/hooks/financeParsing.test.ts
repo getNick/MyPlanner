@@ -21,6 +21,7 @@ const sample: BackendTransaction = {
   currency: "USD",
   description: "Coffee House",
   additionalNotes: "Lunch with team",
+  baseAmount: null,
   balanceAfter: null,
   dataOrigin: "Receipt",
   rawTransactionData: null,

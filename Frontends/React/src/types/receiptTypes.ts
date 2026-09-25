@@ -46,6 +46,12 @@ export interface BackendTransaction {
   timestamp: string | null; // nullable — receipts may not have a timestamp
   amount: number;
   currency: 'UAH' | 'USD' | 'EURO';
+  /**
+   * What the row cost in the account's own currency, straight from the statement's card-currency
+   * column. Null on rows no bank statement produced — a Bill typed at the kitchen table has no
+   * card figure to borrow.
+   */
+  baseAmount: number | null;
   description: string;
   additionalNotes: string | null;
   balanceAfter: number | null;

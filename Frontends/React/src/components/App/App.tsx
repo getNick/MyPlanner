@@ -12,7 +12,9 @@ import NotePage from "../../pages/NotePage/NotePage";
 import ProtectedRoute from "../ProtectedRoute/ProtectedRoute";
 import LayoutShell from "../LayoutShell/LayoutShell";
 import { TodoTimePage } from "../../pages/TodoTimePage/TodoTimePage";
+import { BankStatementsPage } from "../../pages/BankStatementsPage/BankStatementsPage";
 import { ShoppingBillsPage } from "../../pages/ShoppingBillsPage/ShoppingBillsPage";
+import PaymentMethodsPage from "../../pages/PaymentMethodsPage/PaymentMethodsPage";
 
 const App: React.FC = () => {
   const router = createBrowserRouter([
@@ -56,6 +58,16 @@ const App: React.FC = () => {
             return params.noteId;
           },
           element: <NotePage />,
+        },
+        {
+          path: "bank",
+          element: <BankStatementsPage />,
+        },
+        {
+          // Deliberately not in the sidebar: you come here to fix a method and go back to
+          // importing, so `/bank` links to it instead of it competing for a nav slot.
+          path: "payment-methods",
+          element: <PaymentMethodsPage />,
         },
         {
           path: "shopping-bills",

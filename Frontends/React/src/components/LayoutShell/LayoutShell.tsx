@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", path: "/", icon: LayoutDashboard },
   { id: "todo", label: "TODO", path: "/todo", icon: Clock },
   { id: "finance", label: "Finance", path: "/finance", icon: TrendingUp },
-  { id: "bank", label: "Bank", path: "/bank", icon: Landmark },
+  { id: "bank", label: "Bank", path: "/finance/bank", icon: Landmark },
   {
     id: "shopping-bills",
     label: "Shopping Bills",
