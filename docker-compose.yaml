@@ -25,6 +25,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       MYSQLCONNSTR_LOCALDB: ${MYSQLCONNSTR_LOCALDB}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LlmSettings__Model: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
 
   database:
     image: mysql
