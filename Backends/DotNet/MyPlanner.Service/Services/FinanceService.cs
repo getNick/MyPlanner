@@ -15,11 +15,13 @@ public partial class FinanceService : IFinanceService
 {
     private readonly ApplicationDbContext _context;
     private readonly ILlmService _llmService;
+    private readonly IBucketStore _bucket;
 
-    public FinanceService(ApplicationDbContext context, ILlmService llmService)
+    public FinanceService(ApplicationDbContext context, ILlmService llmService, IBucketStore bucket)
     {
         _context = context;
         _llmService = llmService;
+        _bucket = bucket;
     }
 
     // PaymentMethod operations
@@ -104,11 +106,12 @@ public partial class FinanceService : IFinanceService
     /// <summary>
     /// Reads a statement file for the target payment method and reports what it says — row count,
     /// date span, rows needing review — without storing anything. The confirmation step of a
-    /// two-step import; the browser keeps the file between the two calls.
+    /// two-step import; the browser keeps the file between the two calls. Neither the Bucket nor the
+    /// ledger is touched: at preview time nothing has been decided yet (Q2).
     /// </summary>
     public async Task<BankStatementSummary> PreviewBankingFileAsync(ProcessBankingFileRequest request, string userId)
     {
-        var (paymentMethod, parsed) = await ReadBankStatementAsync(request, userId);
+        var (paymentMethod, parsed, _) = await ReadBankStatementAsync(request, userId);
         return BuildSummary(paymentMethod, parsed);
     }
 
@@ -123,7 +126,11 @@ public partial class FinanceService : IFinanceService
 
     private async Task<BankStatementImportResult> ImportBankingFileCoreAsync(ProcessBankingFileRequest request, string userId)
     {
-        var (paymentMethod, parsed) = await ReadBankStatementAsync(request, userId);
+        var (paymentMethod, parsed, fileBytes) = await ReadBankStatementAsync(request, userId);
+
+        // The Statement File is written before any row is: every Bank Transaction of this import names
+        // that one file, so a committed row must never point at a file that failed to save (D9).
+        var statementFileKey = await StoreStatementFileAsync(request.ContentType, fileBytes);
 
         // A Provisional Bill is not bank evidence, even at the exact statement Timestamp.
         // The broader deduplication policy remains timestamp + absolute amount.
@@ -165,7 +172,11 @@ public partial class FinanceService : IFinanceService
                 Description = dto.Description,
                 BalanceAfter = dto.BalanceAfter,
                 DataOrigin = DataOrigin.Bank,
-                RawTransactionData = dto.RawTransactionData
+                // This row's address inside the Statement File: which file, which line, and which Bank
+                // Profile it was read as (D8).
+                RawTransactionData = RawTransactionDataEnvelope.Empty
+                    .WithBank(new BankRawData(statementFileKey, dto.RowNumber, parsed.ProfileName))
+                    .ToJson(),
             };
 
             ApplyMccCategory(transaction, dto);
@@ -201,8 +212,9 @@ public partial class FinanceService : IFinanceService
     /// <summary>
     /// Resolves the import target and reads its file. Both refusals happen here, once:
     /// a method with no bank set (nothing to read the file with), and a bank we have no profile for.
+    /// The file's bytes come back alongside the rows so the caller can store them (D9).
     /// </summary>
-    private async Task<(PaymentMethod PaymentMethod, BankParseResult Parsed)> ReadBankStatementAsync(
+    private async Task<(PaymentMethod PaymentMethod, BankParseResult Parsed, byte[] FileBytes)> ReadBankStatementAsync(
         ProcessBankingFileRequest request, string userId)
     {
         var paymentMethod = await _context.PaymentMethods
@@ -216,11 +228,50 @@ public partial class FinanceService : IFinanceService
                 $"{paymentMethod.Name} has no bank set, so there is no statement format to read. " +
                 "Set the bank on the payment method first.");
 
+        // The upload is read into memory once, here: the CSV reader closes whatever stream it is given,
+        // and the same bytes have to still be available to store afterwards. The cap is refused before
+        // the parse, which is the expensive work it protects (D11).
+        var fileBytes = await ReadUploadAsync(request.FileStream, "A statement file");
+
         // One entry point decides file kind and column map; there is no default profile to fall
         // back onto — by design.
-        var parsed = BankExportParser.Parse(request.FileStream, request.ContentType, paymentMethod.BankProvider);
+        using var parseStream = new MemoryStream(fileBytes);
+        var parsed = BankExportParser.Parse(parseStream, request.ContentType, paymentMethod.BankProvider);
 
-        return (paymentMethod, parsed);
+        return (paymentMethod, parsed, fileBytes);
+    }
+
+    /// <summary>
+    /// Writes the Statement File into the Bucket verbatim and returns its FileKey. Identical bytes from a
+    /// re-import land on the same key, so importing a file twice stores it once (D6).
+    /// </summary>
+    private async Task<string> StoreStatementFileAsync(string contentType, byte[] fileBytes)
+    {
+        await using var stream = new MemoryStream(fileBytes);
+        return await _bucket.SaveAsync(stream, contentType);
+    }
+
+    /// <summary>
+    /// Reads an upload into memory, refusing it as soon as it passes the cap (D11) rather than only when
+    /// its hash comes out too big — so an over-limit file never reaches a parse or a model call.
+    /// </summary>
+    private static async Task<byte[]> ReadUploadAsync(Stream fileStream, string what)
+    {
+        EnsureWithinUploadLimit(fileStream, what);
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        var total = 0L;
+        int read;
+        while ((read = await fileStream.ReadAsync(chunk)) > 0)
+        {
+            total += read;
+            if (total > UploadLimit.MaxBytes)
+                throw new UploadTooLargeException(what);
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 
     private static BankStatementSummary BuildSummary(PaymentMethod paymentMethod, BankParseResult parsed)
@@ -308,9 +359,26 @@ public partial class FinanceService : IFinanceService
         });
     }
 
-    /// <summary>Runs OCR only. No ledger row is created until the corrected draft is confirmed.</summary>
-    public Task<ReceiptDto> PreviewReceiptAsync(ProcessReceiptRequest request) =>
-        ReceiptParser.ProcessReceiptAsync(_llmService, request.FileStream, request.ContentType);
+    /// <summary>
+    /// Runs OCR only. No ledger row is created and no file is stored until the corrected draft is
+    /// confirmed (Q2/Q5). The upload cap is enforced here rather than at the door alone: an over-limit
+    /// image must never reach a model call, which is the expensive thing being protected (D11).
+    /// </summary>
+    public async Task<ReceiptDto> PreviewReceiptAsync(ProcessReceiptRequest request)
+    {
+        EnsureWithinUploadLimit(request.FileStream, "A bill image");
+        return await ReceiptParser.ProcessReceiptAsync(_llmService, request.FileStream, request.ContentType);
+    }
+
+    /// <summary>
+    /// The shared upload cap (D11). A stream that cannot say its length is still caught later, by the
+    /// Bucket as it hashes — this check exists to fail before any parsing or model work happens.
+    /// </summary>
+    private static void EnsureWithinUploadLimit(Stream fileStream, string what)
+    {
+        if (fileStream.CanSeek && fileStream.Length > UploadLimit.MaxBytes)
+            throw new UploadTooLargeException(what);
+    }
 
     /// <summary>Validates and saves the user's corrected Bill Draft.</summary>
     public Task<Transaction> ConfirmReceiptAsync(ConfirmReceiptRequest request, string userId) =>
@@ -330,6 +398,10 @@ public partial class FinanceService : IFinanceService
                 .AnyAsync(pm => pm.Id == request.PaymentMethodId && pm.UserId == userId))
             throw new InvalidOperationException("Payment Method not found for this household.");
 
+        // The paper goes to disk before the ledger row exists: a Bill is its Line Items plus this one
+        // pointer, and if the database write fails afterwards the orphan file costs nothing (D9/D12).
+        var imageFileKey = await _bucket.SaveAsync(request.FileStream, request.ContentType);
+
         var transaction = new Transaction
         {
             UserId = userId,
@@ -340,7 +412,8 @@ public partial class FinanceService : IFinanceService
             Currency = ParseCurrencyString(receipt.Currency),
             Description = string.IsNullOrWhiteSpace(receipt.MerchantName) ? "Receipt purchase" : receipt.MerchantName.Trim(),
             AdditionalNotes = receipt.AdditionalNotes,
-            DataOrigin = DataOrigin.Receipt
+            DataOrigin = DataOrigin.Receipt,
+            RawTransactionData = RawTransactionDataEnvelope.Empty.WithBill(new BillRawData(imageFileKey)).ToJson(),
         };
 
         foreach (var item in receipt.Items)

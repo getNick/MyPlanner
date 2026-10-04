@@ -27,6 +27,13 @@ services:
       MYSQLCONNSTR_LOCALDB: ${MYSQLCONNSTR_LOCALDB}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       LlmSettings__Model: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      # The Bucket — one flat folder of stored uploads (Bill Images, Statement Files). Inside the
+      # container it is always /app/storage; STORAGE_PATH only chooses the host folder, exactly like
+      # DB_VOLUME_PATH does for the database. The mount is not optional: without it the writes succeed
+      # and vanish on the next `docker compose up`.
+      STORAGE_PATH: /app/storage
+    volumes:
+      - ${STORAGE_PATH:-./storage}:/app/storage
 
   database:
     image: mysql

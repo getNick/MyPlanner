@@ -399,3 +399,7 @@ FodyWeavers.xsd
 
 .env
 db_data
+
+# The Bucket: stored uploads (Bill Images, Statement Files). Like db_data it is a host folder that is
+# never in the repo — and like db_data it is the only copy, so backups are copy-based.
+storage/

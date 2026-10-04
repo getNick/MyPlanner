@@ -16,6 +16,11 @@ public record TransactionDto
     public string? Currency { get; set; }
     public int? MCC { get; set; }
     public decimal? BalanceAfter { get; set; }
-    public string? RawTransactionData { get; set; }
+
+    /// <summary>
+    /// Which line of the statement file this row was read from, counting the header as line 1 — the
+    /// address a future re-parse goes back to (D8). Null for rows that never came from a file.
+    /// </summary>
+    public int? RowNumber { get; set; }
 }
 

@@ -117,6 +117,14 @@ void ConfigureServices(IServiceCollection services)
     // Register LlmSettings as typed options from configuration
     services.Configure<MyPlanner.Service.Models.LlmSettings>(builder.Configuration.GetSection("LlmSettings"));
     services.AddScoped<ILlmService, LlmService>();
+
+    // The Bucket: one flat folder holding every stored upload — Bill Images and Statement Files alike.
+    // STORAGE_PATH names it; the ./storage fallback is ephemeral inside a container, which is why
+    // docker-compose.yaml bind-mounts the folder as well.
+    services.Configure<MyPlanner.Service.Models.BucketOptions>(options =>
+        options.Path = builder.Configuration["STORAGE_PATH"] ?? MyPlanner.Service.Models.BucketOptions.DefaultPath);
+    services.AddSingleton<IBucketStore, BucketStore>();
+
     services.AddScoped<IFinanceService, FinanceService>();
 
 }

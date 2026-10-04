@@ -41,7 +41,8 @@ namespace MyPlanner.UnitTests.Services.Finance;
  *   [x] import/confirmation/complete saves do not reconcile unrelated historical pairs
  *   [x] complete edits preserve item identity, support empty/omitted detail, validate ownership
  *   [x] temporary partial Bill writes do not trigger Matching
- *   [ ] both source payloads + ParserVersion on the merged row — deferred to ticket 08
+ *   [x] a merged row's Raw Transaction Data Envelope keeps both sources: the Bill Image and the Statement
+       File with its line and Bank Profile (D5/D8); ParserVersion itself stays deferred to ticket 08
  *
  * ────────────────────────────────────────────────────────────
  *  Provisional Bills
@@ -313,8 +314,16 @@ public class ReconciliationTests : FinanceServiceTests_Base
             Assert.That(merged.Timestamp, Is.EqualTo(At(18, 30, 0)),
                 "the bank Timestamp travels — otherwise the next import of the same file is no longer a duplicate");
             Assert.That(merged.BalanceAfter, Is.EqualTo(16752.46m));
-            Assert.That(merged.RawTransactionData, Does.Contain("SILPO"),
-                "the verbatim statement line is kept for ticket 08's un-merge");
+            var envelope = EnvelopeOf(merged);
+            Assert.That(envelope.Bank!.StatementFileKey, Is.Not.Null,
+                "the merged row names the Statement File it came from — the bare line is no longer stored (D5)");
+            Assert.That(envelope.Bank.RowNumber, Is.EqualTo(2),
+                "and which line of it: everything a replay of this Bank Row needs travels through the merge");
+            Assert.That(envelope.Bank.Profile, Is.EqualTo("MonoBank"));
+            Assert.That(envelope.Bill!.ImageKey, Is.Not.Null,
+                "the Bill Image survives too: a merge has two sources, so its Envelope holds both sides");
+            Assert.That(FileKeysInBucket(), Does.Contain(envelope.Bill.ImageKey),
+                "and that pointer still resolves to bytes on disk");
             Assert.That(_testContext.Model.FindEntityType(typeof(Transaction))!
                 .FindProperty(nameof(Transaction.MoneyDelta)), Is.Null,
                 "Money Delta is derived, never a stored fact");

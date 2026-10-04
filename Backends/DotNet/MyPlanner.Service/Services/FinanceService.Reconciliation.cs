@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyPlanner.Data.Entities.Finance;
+using MyPlanner.Service.Models;
 
 namespace MyPlanner.Service;
 
@@ -86,7 +87,12 @@ public partial class FinanceService
         bill.BaseAmount = bankRow.BaseAmount;
         bill.BalanceAfter = bankRow.BalanceAfter;
         bill.PaymentMethodId = bankRow.PaymentMethodId; // Owner inherited from the card that matched
-        bill.RawTransactionData = bankRow.RawTransactionData;
+        // A Reconciled row has both sources, so its envelope keeps both sides: the Bill's image pointer
+        // survives and the Bank side — FileKey, line, profile — travels with it. Overwriting one with the
+        // other would throw away half of what this merge is evidence of.
+        bill.RawTransactionData = RawTransactionDataEnvelope.Read(bill.RawTransactionData)
+            .WithBank(RawTransactionDataEnvelope.Read(bankRow.RawTransactionData).Bank)
+            .ToJson();
         bill.DataOrigin = DataOrigin.Reconciled;
 
         _context.Transactions.Remove(bankRow);

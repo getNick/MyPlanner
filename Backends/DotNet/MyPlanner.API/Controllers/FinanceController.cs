@@ -247,7 +247,16 @@ public class FinanceController : ControllerBase
             FileStream = file!.OpenReadStream(),
             ContentType = file.ContentType
         };
-        return Ok(await _financeService.PreviewReceiptAsync(request));
+
+        try
+        {
+            return Ok(await _financeService.PreviewReceiptAsync(request));
+        }
+        catch (UploadTooLargeException ex)
+        {
+            // Refused before the model was called — the cap exists to stop work, not just bytes.
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("receipts/confirm")]
@@ -284,6 +293,10 @@ public class FinanceController : ControllerBase
             }, userId);
             return CreatedAtAction(nameof(GetTransaction), new { id = saved.Id }, saved);
         }
+        catch (UploadTooLargeException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { error = ex.Message });
@@ -300,6 +313,13 @@ public class FinanceController : ControllerBase
         if (!AllowedImageContentTypes.Contains(file.ContentType))
         {
             error = $"Invalid content type '{file.ContentType}'. Allowed types: {string.Join(", ", AllowedImageContentTypes)}";
+            return false;
+        }
+        // The size is known before anything reads the file, so this is the cheapest place the cap lives
+        // (D11); the service and the Bucket refuse it again for callers that do not come through here.
+        if (file.Length > UploadLimit.MaxBytes)
+        {
+            error = UploadLimit.RefusalFor("A bill image");
             return false;
         }
         error = string.Empty;
@@ -340,6 +360,10 @@ public class FinanceController : ControllerBase
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
+        // Cheapest possible refusal: the size is known before a single byte of the statement is parsed.
+        if (file.Length > UploadLimit.MaxBytes)
+            return BadRequest(new { error = UploadLimit.RefusalFor("A statement file") });
+
         var request = new MyPlanner.Service.Requests.Finance.ProcessBankingFileRequest
         {
             FileStream = file.OpenReadStream(),
@@ -356,6 +380,10 @@ public class FinanceController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
         catch (UnsupportedBankProviderException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (UploadTooLargeException ex)
         {
             return BadRequest(new { error = ex.Message });
         }

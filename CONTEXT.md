@@ -7,11 +7,9 @@ loose. This glossary starts with the billing domain resolved while designing
 
 ## Bill
 
-A transaction whose `dataOrigin` is `Receipt` — an OCR'd or manually-entered
-shopping bill. A Bill owns a Merchant, a Timestamp, a Currency, a Total, free
-text Notes, and a list of Line Items. This is the unit the user edits and
-commits. A Bill is either **Provisional** (no bank row tied to it yet) or
-**Reconciled** (merged with one).
+A saved shopping receipt with a Merchant, confirmed Timestamp, Currency, Total,
+Notes, and Line Items. A Bill is either **Provisional** (no Bank Transaction tied
+to it yet) or **Reconciled** (merged with one).
 _Avoid_: Invoice, expense, transaction (a Bill is one kind of transaction; the
 generic backend entity is a Transaction).
 
@@ -22,7 +20,7 @@ _Avoid_: treating every Transaction as a Bill, or counting a Reconciled purchase
 
 ## Manual Transaction
 
-A ledger Transaction entered directly by a user rather than imported from a Bank statement or created from a shopping Bill. Manual entry records a description, amount, and Timestamp; it is not a Bill and does not have Bill Line Items.
+A ledger Transaction entered directly by a user rather than imported from a Bank statement or created from a shopping Bill. Manual entry records a description, amount, and Timestamp, with one Line Item of the same amount classified when known. It is not a Bill.
 _Avoid_: using manual dashboard entry as a substitute for the Shopping Bills workflow.
 
 ## Merchant
@@ -33,8 +31,8 @@ _Avoid_: Vendor, shop, store (the receipt prints "Merchant" — keep that word).
 
 ## Timestamp
 
-The instant the Bill occurred, stored as ISO-8601 and nullable (some receipts
-have no date). Displayed compactly with 24-hour time.
+The instant a Transaction occurred. A saved Bill or Manual Transaction has a
+confirmed Timestamp; an unsaved Bill Draft may lack one until the user supplies it.
 _Avoid_: Date, receipt date (it carries time as well as date).
 
 ## Currency
@@ -50,8 +48,8 @@ _Avoid_: Grand total, amount, sum.
 
 ## Line Item
 
-A single purchased entry on a Bill: a Name, a Quantity, a unit Price, the
-derived Total Price, and a Category / Subcategory classification.
+A purchased entry on a Bill, or the single detail of a Manual Transaction:
+Name, Quantity, unit Price, Total Price, and optional Category / Subcategory.
 _Avoid_: Row, entry, product, item (a "row" is a UI line; the domain object is
 a Line Item).
 
@@ -63,10 +61,20 @@ _Avoid_: Type, tag, group.
 
 ## Draft
 
-The set of staged, unsaved edits a Bill owns locally before the user commits.
-Edits and line-item deletions live in the Draft and are applied only when the
-user saves.
-_Avoid_: Unsaved changes, temp data, local state.
+Staged, unsaved edits to an existing Bill. Applied only when the user saves.
+_Avoid_: Bill Draft (a new Bill awaiting confirmation), temp data.
+
+## Bill Draft
+
+An unsaved receipt image and editable OCR result, held until the user confirms
+the Timestamp and saves a Bill. It does not count as spending.
+_Avoid_: Provisional Bill (already saved), Draft (edits to an existing Bill).
+
+## Receipt Evidence
+
+The privately stored original receipt image backing a saved Bill, distinct from
+its extracted Line Items. It remains associated with the Bill after reconciliation.
+_Avoid_: OCR result, public image link.
 
 ---
 
@@ -82,22 +90,24 @@ _Avoid_: Account, card (when cash is meant), wallet (except Cash Wallet).
 
 ## Bank Transaction
 
-A Transaction whose `dataOrigin` is `Bank` — a row read from a bank statement. The
-authoritative record that money moved: amount, timestamp, Payment Method, balance after,
-MCC. Nothing else asserts that money left a card.
+A Transaction read from a bank statement. The authoritative record of card
+money movement: amount, Timestamp, Payment Method, balance after, MCC. A Bill
+without a Bank Transaction is provisional; manual entry asserts money movement
+by the person, not by the bank.
 _Avoid_: Statement line, bank record (the entity is a Transaction with an origin).
 
 ## Reconciled
 
 A Bill that has been merged with its Bank Transaction: one row carrying the bank's money
-facts and the Bill's Line Items, `dataOrigin = Reconciled`. Because matched records merge,
+facts and the Bill's Line Items. Because matched records merge,
 a purchase can never be counted twice.
 _Avoid_: Matched, linked, synced (matching is the act; reconciled is the state).
 
 ## Provisional Bill
 
-A Bill with no Bank Transaction behind it yet. It counts as spend, but visibly unverified —
-aging past 30 days it becomes a Review Item.
+A saved Bill with no Bank Transaction behind it yet. It counts as spend, but
+visibly unverified; its Payment Method may be Unknown until matching. Aging
+past 30 days it becomes a Review Item.
 _Avoid_: Pending, temporary bill.
 
 ## Money Delta
@@ -168,8 +178,69 @@ after` for every consecutive pair, using the bank's own balance-after column. A 
 loudly and never blocks the import.
 _Avoid_: Reconciliation (that is Bill ↔ Bank), balance check (too vague).
 
+## AmountUah
+
+A Transaction's amount expressed in UAH for household totals, backed by a bank
+UAH figure or a dated conversion. When no trustworthy rate exists, it is unknown;
+the original Amount and card-currency BaseAmount are not interchangeable with it.
+_Avoid_: BaseAmount, original-currency Amount.
+
+## Transaction Kind
+
+The form of a ledger Transaction: Bank, Receipt (Provisional Bill), Manual, or
+Reconciled. Reconciled describes a combined row, not a separate data source.
+_Avoid_: Data Origin (suggests all four values name sources).
+
 ## Coverage
 
-The percentage of money in a total that is backed by Line Items. Printed beside totals so
-"no receipt" is never mistaken for "nothing bought".
+The percentage of money in a total that is backed by actual Line Items rather
+than bank MCC classification alone. Printed beside totals so "no receipt" is
+never mistaken for "nothing bought".
 _Avoid_: Completeness, accuracy.
+
+# Stored source vocabulary
+
+Design: `docs/receipt-raw-storage-design.md`. These name what the ledger keeps *behind* a row —
+the bytes it was extracted from. Nothing is read back into the product yet; the corpus exists so
+extraction can be re-run once models or parsers improve.
+
+## Bill Image
+
+The photo of a shopping Bill that OCR was given for a Provisional Bill; the bytes a future OCR
+improvement must be run against. Stored verbatim under its content hash, never edited.
+_Avoid_: Receipt file, scan, attachment.
+
+## Statement File
+
+The bank export exactly as uploaded (CSV today; Excel, PDF or a photo possible later), kept
+verbatim in the Bucket under its content hash. One import stores one file, however many rows it
+yields — and re-importing the same bytes stores it once.
+_Avoid_: Bank file, CSV upload, statement source.
+
+## Bucket
+
+The single flat folder where every stored upload lands, named by the `STORAGE_PATH` env var (code
+default `./storage`) and bind-mounted into the api container. Files are distinguished only by
+extension, never by subfolder.
+_Avoid_: Storage root with subfolders, `receipts/` and `statements/` folders, uploads directory.
+
+## FileKey
+
+The value written into the envelope that resolves to a stored file in the Bucket:
+`<sha256-hex>.<ext>` — the whole filename, and the only handle anyone holds for a stored file.
+_Avoid_: File path, filename (as a concept), blob id.
+
+## Raw Transaction Data Envelope
+
+The JSON object `Transaction.RawTransactionData` carries from now on: one nested object per
+origin — `bill` (the Bill Image's FileKey) and `bank` (Statement File key, row number, profile) —
+so a Reconciled row holds both after its Bank Transaction is deleted. Older rows may hold a bare
+statement line or nothing; readers tolerate all three.
+_Avoid_: Raw json, metadata blob, extra fields.
+
+## Replayable Bank Row
+
+A Bank Transaction whose stored raw data lets the same parser extract it again: the Statement File
+plus the row's line number and Bank Profile, not the bare data line alone. Today's column holds
+the line only, which is why it dies.
+_Avoid_: Raw record, CSV string, source row.

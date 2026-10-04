@@ -34,9 +34,12 @@ public sealed record UnreadableBankRow(
 /// What one statement file yielded: the rows worth inserting, and the rows that need a person.
 /// Nothing read from the file is lost between the two lists.
 /// </summary>
+/// <param name="ProfileName">Which <strong>Bank Profile</strong> the file was read as — the assumption a
+/// future re-parse needs in order to reproduce these same rows (D8).</param>
 public sealed record BankParseResult(
     IReadOnlyList<TransactionDto> Rows,
-    IReadOnlyList<UnreadableBankRow> NeedsReview)
+    IReadOnlyList<UnreadableBankRow> NeedsReview,
+    string? ProfileName = null)
 {
     public static BankParseResult Empty { get; } = new(Array.Empty<TransactionDto>(), Array.Empty<UnreadableBankRow>());
 }

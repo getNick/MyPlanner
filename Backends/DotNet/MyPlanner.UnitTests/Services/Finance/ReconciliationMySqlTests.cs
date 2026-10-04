@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
 using Moq;
 using MyPlanner.Data.DBContexts;
 using MyPlanner.Data.Entities.Finance;
@@ -26,6 +27,8 @@ namespace MyPlanner.UnitTests.Services.Finance;
 public class ReconciliationMySqlTests
 {
     private string _connectionString = null!;
+    private string _bucketPath = null!;
+    private IBucketStore _bucket = null!;
     private ApplicationDbContext _context = null!;
     private IFinanceService _sut = null!;
     private readonly SaveFailure _failure = new();
@@ -45,9 +48,11 @@ public class ReconciliationMySqlTests
         };
         _connectionString = builder.ConnectionString;
         _failure.Remaining = 0;
+        _bucketPath = Path.Combine(Path.GetTempPath(), "myplanner-bucket-" + Guid.NewGuid().ToString("N"));
+        _bucket = new BucketStore(Options.Create(new BucketOptions { Path = _bucketPath }));
         _context = NewContext(injectFailure: true);
         await _context.Database.EnsureCreatedAsync();
-        _sut = new FinanceService(_context, Mock.Of<ILlmService>());
+        _sut = Service(_context);
         _cardId = await _sut.CreatePaymentMethodAsync(User, new PaymentMethod
         {
             UserId = User, Name = "Test card", Currency = Currency.UAH,
@@ -63,6 +68,10 @@ public class ReconciliationMySqlTests
         return new ApplicationDbContext(options.Options);
     }
 
+    /// <summary>Every service here writes to a real Bucket in a throwaway folder.</summary>
+    private IFinanceService Service(ApplicationDbContext context) =>
+        new FinanceService(context, Mock.Of<ILlmService>(), _bucket);
+
     [TearDown]
     public async Task TearDown()
     {
@@ -70,6 +79,7 @@ public class ReconciliationMySqlTests
         await _context.Database.EnsureDeletedAsync();
         await _context.DisposeAsync();
         _context = null!;
+        try { Directory.Delete(_bucketPath, recursive: true); } catch (IOException) { }
     }
 
     private Task<Transaction> ConfirmBill(decimal amount = 20m, List<ReceiptItemDto>? items = null) => _sut.ConfirmReceiptAsync(
@@ -103,7 +113,7 @@ public class ReconciliationMySqlTests
         Assert.ThrowsAsync<InvalidOperationException>(() => Import());
 
         await using var fresh = NewContext();
-        var ledger = await new FinanceService(fresh, Mock.Of<ILlmService>()).GetTransactionsAsync(User);
+        var ledger = await Service(fresh).GetTransactionsAsync(User);
         Assert.Multiple(() =>
         {
             Assert.That(ledger, Has.Count.EqualTo(1));
@@ -121,7 +131,7 @@ public class ReconciliationMySqlTests
         Assert.ThrowsAsync<InvalidOperationException>(() => ConfirmBill());
 
         await using var fresh = NewContext();
-        var ledger = await new FinanceService(fresh, Mock.Of<ILlmService>()).GetTransactionsAsync(User);
+        var ledger = await Service(fresh).GetTransactionsAsync(User);
         Assert.That(ledger.Select(t => (t.Id, t.DataOrigin)),
             Is.EqualTo(new[] { (bank.Id, DataOrigin.Bank) }));
     }
@@ -149,7 +159,7 @@ public class ReconciliationMySqlTests
         Assert.ThrowsAsync<InvalidOperationException>(() => _sut.UpdateTransactionAsync(User, header, items));
 
         await using var fresh = NewContext();
-        var ledger = await new FinanceService(fresh, Mock.Of<ILlmService>()).GetTransactionsAsync(User);
+        var ledger = await Service(fresh).GetTransactionsAsync(User);
         var storedBill = ledger.Single(t => t.Id == bill.Id);
         Assert.Multiple(() =>
         {
@@ -188,7 +198,7 @@ public class ReconciliationMySqlTests
         });
 
         await using var fresh = NewContext();
-        var service = new FinanceService(fresh, Mock.Of<ILlmService>());
+        var service = Service(fresh);
         var ledger = await service.GetTransactionsAsync(User);
         var stored = ledger.Single();
         var deletedBank = await service.GetTransactionAsync(bank.Id, User);
