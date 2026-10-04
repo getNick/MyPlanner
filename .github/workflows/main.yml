@@ -31,6 +31,7 @@ jobs:
         GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
         HTTPS: ${{ vars.HTTPS }}
         DB_VOLUME_PATH: ${{ vars.DB_VOLUME_PATH }}
+        STORAGE_PATH: ${{ vars.STORAGE_PATH }}
 
     # Step 3: Verify the services are running (Optional)
     - name: Verify Services
