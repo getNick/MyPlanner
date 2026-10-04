@@ -242,7 +242,9 @@ public class ReceiptCategoriesTests
     {
         var testCases = new (int Mcc, string? ExpectedSubcategory)[]
         {
-            (5814, "Restaurants"),
+            // 5814 is where Ukrainian acquirers put coffee shops, so the map reads it that way rather
+            // than as the sit-down Restaurants line.
+            (5814, "Cafes & Coffee"),
             (5411, "Pantry"),
             (5310, "Cleaning & Consumables"),
             (5611, "Clothing & Shoes"),
