@@ -8,8 +8,10 @@ public partial class FinanceService
     /// relational integration tests exercise the transaction and failure path.</summary>
     private async Task<T> InTransactionAsync<T>(Func<Task<T>> write)
     {
+        // Legacy single-item writes reuse the same guarded complete-detail save.
+        if (_context.Database.CurrentTransaction != null) return await write();
         await using var transaction = _context.Database.IsRelational()
-            ? await _context.Database.BeginTransactionAsync()
+            ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
             : null;
         try
         {

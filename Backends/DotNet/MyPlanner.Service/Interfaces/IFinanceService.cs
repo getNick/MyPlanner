@@ -37,9 +37,9 @@ public interface IFinanceService
     Task<IReadOnlyList<Transaction>> GetTransactionsAsync(string? userId = null, DateTime? startDate = null, DateTime? endDate = null);
     Task<Transaction?> GetTransactionAsync(Guid id, string userId);
     Task<Guid> CreateTransactionAsync(string userId, Transaction model);
-    /// <summary>Items supplied means a complete Bill save; omitted preserves legacy header-only writes.
+    /// <summary>Items supplied means a complete Expense detail save; omitted preserves legacy header-only writes.
     /// Returns the surviving stored row, or null when the household does not own it.</summary>
-    Task<Transaction?> UpdateTransactionAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items = null);
+    Task<Transaction?> UpdateTransactionAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items = null, string? expectedDetailVersion = null);
     Task<bool> DeleteTransactionAsync(Guid id, string userId);
 
     // TransactionItem operations (may be accessed through transaction context)

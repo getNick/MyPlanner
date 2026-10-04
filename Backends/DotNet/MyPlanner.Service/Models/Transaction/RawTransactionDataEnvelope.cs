@@ -69,4 +69,6 @@ public sealed record BankRawData(
     string? StatementFileKey = null,
     int? RowNumber = null,
     string? Profile = null,
-    string? LegacyLine = null);
+    string? LegacyLine = null,
+    string? Category = null,
+    string? Subcategory = null);

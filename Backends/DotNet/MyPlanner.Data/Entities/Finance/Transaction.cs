@@ -1,4 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using MyPlanner.Data.Entities.Common;
 
 namespace MyPlanner.Data.Entities.Finance;
@@ -9,44 +12,51 @@ public class Transaction : EntityBase
     public required TransactionType Type { get; set; }
     public Guid? PaymentMethodId { get; set; }
     public Guid? ToPaymentMethodId { get; set; } // only for transfer
-
     public DateTime? Timestamp { get; set; }
 
-    /// <summary>
-    /// The amount in the transaction's own currency (<see cref="Currency"/>), absolute value — the
-    /// sign lives in <see cref="Type"/>, which is also the row's money role.
-    /// </summary>
+    /// <summary>The amount in the Transaction Currency, absolute; the sign lives in Type.</summary>
     public required decimal Amount { get; set; }
     public required Currency Currency { get; set; }
 
-    /// <summary>
-    /// What the move cost in the card's currency, taken straight from the statement's
-    /// "Сума в валюті картки (UAH)" column. Null on rows no bank statement produced — a Bill typed
-    /// at the kitchen table has no card-currency figure to borrow. A foreign-currency purchase keeps
-    /// <see cref="Amount"/> in what it was actually paid in and reports this alongside it.
-    /// </summary>
+    /// <summary>The bank's card-currency figure, not an AmountUah conversion. Null without bank evidence.</summary>
     public decimal? BaseAmount { get; set; }
     public required string Description { get; set; }
     public string? AdditionalNotes { get; set; }
     public decimal? BalanceAfter { get; set; }
-
     public List<TransactionItem> Items { get; set; } = new();
     public DataOrigin DataOrigin { get; set; }
     public string? RawTransactionData { get; set; }
 
+    // A snapshot token catches stale editors without a persisted revision column. Canonical
+    // decimals avoid different tokens for the same value before/after database scale conversion.
+    [NotMapped]
+    public string DetailVersion => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        DataOrigin, Type, Amount = CanonicalMoney(Amount), Currency, Timestamp = Timestamp?.Ticks, PaymentMethodId, ToPaymentMethodId,
+        Description, AdditionalNotes,
+        Items = Items.OrderBy(i => i.Id).Select(i => new
+        {
+            i.Id, i.Name, i.FullName, i.Category, i.Subcategory, i.Quantity,
+            PricePerUnit = CanonicalMoney(i.PricePerUnit), TotalPrice = CanonicalMoney(i.TotalPrice), i.Origin
+        })
+    })));
+
+    private static string CanonicalMoney(decimal value) => value.ToString("G29", CultureInfo.InvariantCulture);
+
+    [NotMapped]
+    public List<TransactionReviewCandidate> ReviewCandidates { get; set; } = new();
+
     /// <summary>
-    /// <strong>Money Delta</strong>: the bank amount minus the sum of the Bill's Line Items — how much
-    /// of the purchase the paper failed to explain. Never stored: it is always derived from the two
-    /// things it compares, so editing Line Items widens it without any write, and the recorded bank
-    /// amount is untouched. Null for anything that is not a Reconciled row — a Provisional Bill has
-    /// no bank total to differ from. Reading it needs Line Items loaded, so the queries
-    /// <c>Include(t =&gt; t.Items)</c>.
+    /// Money Delta: bank amount minus Bill Line Items, derived rather than stored. Needs Items
+    /// loaded. Null outside Reconciled Bills; a partial Bank/Manual breakdown is not a Money Delta.
     /// </summary>
     [NotMapped]
     public decimal? MoneyDelta => DataOrigin == DataOrigin.Reconciled
         ? Amount - Items.Sum(item => item.TotalPrice)
         : null;
 }
+
+public record TransactionReviewCandidate(Guid Id, string Description, decimal Amount, Currency Currency, DateTime? Timestamp);
 
 public enum TransactionType
 {
@@ -61,9 +71,6 @@ public enum DataOrigin
     Manual,
     Receipt,
 
-    /// <summary>
-    /// A Bill that absorbed the Bank Transaction it matches: the bank figures are authoritative, the
-    /// Bill's Line Items survive. One purchase, one row.
-    /// </summary>
+    /// <summary>A Bill merged with its Bank Transaction: one record, bank facts and Bill detail.</summary>
     Reconciled,
 }

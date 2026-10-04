@@ -208,7 +208,7 @@ public class FinanceController : ControllerBase
                 PricePerUnit = item.PricePerUnit,
                 TotalPrice = item.TotalPrice
             }).ToArray();
-            var updated = await _financeService.UpdateTransactionAsync(userId, entity, items);
+            var updated = await _financeService.UpdateTransactionAsync(userId, entity, items, dto.ExpectedDetailVersion);
             if (updated == null) return NotFound();
             return Ok(updated);
         }

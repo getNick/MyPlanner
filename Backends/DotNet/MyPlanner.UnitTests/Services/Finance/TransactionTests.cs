@@ -190,6 +190,7 @@ public class TransactionTests : FinanceServiceTests_Base
     {
         var transaction = new Transaction
         {
+            DataOrigin = DataOrigin.Manual,
             Id = Guid.NewGuid(),
             UserId = _testUserId,
             Type = TransactionType.Expense,
@@ -206,6 +207,7 @@ public class TransactionTests : FinanceServiceTests_Base
         var updateModel = new Transaction
         {
             Id = transaction.Id,
+            DataOrigin = DataOrigin.Manual,
             UserId = _testUserId,
             Type = TransactionType.Expense,
             PaymentMethodId = transaction.PaymentMethodId,

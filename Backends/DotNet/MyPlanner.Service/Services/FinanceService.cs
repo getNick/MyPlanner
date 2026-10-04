@@ -201,6 +201,7 @@ public partial class FinanceService : IFinanceService
             .Where(t => t.UserId == userId && survivingIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id);
 
+        await PopulateReviewCandidatesAsync(stored.Values.ToArray(), userId);
         return new BankStatementImportResult(
             BuildSummary(paymentMethod, parsed),
             InsertedRowCount: newTransactions.Count,
@@ -345,6 +346,10 @@ public partial class FinanceService : IFinanceService
             ? ReceiptCategories.GetCategoryFromMcc(dto.MCC.Value)
             : null;
 
+        var envelope = RawTransactionDataEnvelope.Read(transaction.RawTransactionData);
+        transaction.RawTransactionData = envelope.WithBank((envelope.Bank ?? new BankRawData()) with
+        { Category = mccCategory?.Category, Subcategory = mccCategory?.Subcategory }).ToJson();
+
         // All required members must be set in the object initializer. EF Core will
         // overwrite TransactionId with the correct FK when the parent is added to context.
         transaction.Items.Add(new TransactionItem
@@ -439,16 +444,14 @@ public partial class FinanceService : IFinanceService
 
         // The re-read returns the merged truth — DataOrigin, bank amount, delta — so the upload
         // step shows the row as it now is, not as it was before Matching ran.
-        return await _context.Transactions.AsNoTracking()
-            .Include(t => t.Items)
-            .FirstAsync(t => t.Id == transaction.Id);
+        return (await GetTransactionAsync(transaction.Id, userId))!;
     }
 
     public async Task<IReadOnlyList<Transaction>> GetTransactionsAsync(string? userId = null, DateTime? startDate = null, DateTime? endDate = null)
     {
         // Items travel with the row: MoneyDelta reads them, and a Reconciled row without its
         // Line Items would silently report its whole amount as the delta.
-        var query = _context.Transactions.Include(t => t.Items).AsQueryable();
+        var query = _context.Transactions.AsNoTracking().Include(t => t.Items).AsQueryable();
 
         if (!string.IsNullOrEmpty(userId))
         {
@@ -463,14 +466,17 @@ public partial class FinanceService : IFinanceService
                 query = query.Where(t => t.Timestamp.HasValue && t.Timestamp <= endDate.Value);
         }
 
-        return await query.ToListAsync();
+        var rows = await query.ToListAsync();
+        await PopulateReviewCandidatesAsync(rows, userId);
+        return rows;
     }
 
     public async Task<Transaction?> GetTransactionAsync(Guid id, string userId)
     {
-        return await _context.Transactions
-            .Include(t => t.Items)
+        var row = await _context.Transactions.AsNoTracking().Include(t => t.Items)
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+        if (row != null) await PopulateReviewCandidatesAsync(new[] { row }, userId);
+        return row;
     }
 
     public async Task<Guid> CreateTransactionAsync(string userId, Transaction model)
@@ -484,10 +490,10 @@ public partial class FinanceService : IFinanceService
         return model.Id;
     }
 
-    public Task<Transaction?> UpdateTransactionAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items = null) =>
-        InTransactionAsync(() => UpdateTransactionCoreAsync(userId, model, items));
+    public Task<Transaction?> UpdateTransactionAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items = null, string? expectedDetailVersion = null) =>
+        InTransactionAsync(() => UpdateTransactionCoreAsync(userId, model, items, expectedDetailVersion));
 
-    private async Task<Transaction?> UpdateTransactionCoreAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items)
+    private async Task<Transaction?> UpdateTransactionCoreAsync(string userId, Transaction model, IReadOnlyList<TransactionItem>? items, string? expectedDetailVersion)
     {
         var existing = await _context.Transactions.Include(t => t.Items)
             .FirstOrDefaultAsync(t => t.Id == model.Id && t.UserId == userId);
@@ -495,34 +501,46 @@ public partial class FinanceService : IFinanceService
         if (existing == null)
             return null;
 
-        if (existing.DataOrigin == DataOrigin.Reconciled && existing.Type != model.Type)
-            throw new InvalidOperationException("A Reconciled Bill's bank Type cannot be changed by a Bill edit.");
+        if (expectedDetailVersion != null && expectedDetailVersion != existing.DetailVersion)
+            throw new InvalidOperationException("Transaction changed since editing started. Reload before saving.");
+
+        var bankOwned = existing.DataOrigin is DataOrigin.Bank or DataOrigin.Reconciled;
+        var allocationEdit = items != null && existing.DataOrigin is DataOrigin.Bank or DataOrigin.Manual;
+        if (bankOwned && existing.Type != model.Type)
+            throw new InvalidOperationException("Bank-backed Transaction Type cannot be changed by an edit.");
         if (items != null && existing.DataOrigin == DataOrigin.Receipt
                           && (model.DataOrigin != DataOrigin.Receipt || model.Type != TransactionType.Expense))
             throw new InvalidOperationException("A complete Provisional Bill edit must remain a Receipt Expense.");
-        if (existing.DataOrigin != DataOrigin.Reconciled)
+        if (!bankOwned && !allocationEdit)
             await ValidateTransactionWriteAsync(userId, model);
-        if (items != null) ReplaceBillLineItems(existing, items);
+        if (existing.DataOrigin == DataOrigin.Manual && items == null
+            && (model.Amount < 0 || Money(model.Amount) < existing.Items.Where(i => i.Origin != ItemOrigin.AutoGenerated).Sum(i => Money(i.TotalPrice))))
+            throw new InvalidOperationException("Paid amount cannot be reduced below saved allocations.");
+        if (items != null) ReplaceLineItems(existing, items);
 
-        existing.Type = model.Type;
+        if (!bankOwned && !allocationEdit) existing.Type = model.Type;
 
         // The bank's figures are not the household's to retype. On a Reconciled row a Bill edit may
         // change what the paper says (description, notes, Line Items) — that widens Money Delta,
         // nothing else. Without this guard a header PUT would rewrite the bank amount and detach
         // the card.
-        if (existing.DataOrigin != DataOrigin.Reconciled)
+        if (!bankOwned && !allocationEdit)
         {
             existing.PaymentMethodId = model.PaymentMethodId;
             existing.ToPaymentMethodId = model.ToPaymentMethodId;
             existing.Timestamp = model.Timestamp;
-            existing.Amount = model.Amount;
+            existing.Amount = existing.DataOrigin == DataOrigin.Receipt && items != null
+                ? items.Sum(i => i.TotalPrice) : model.Amount;
             existing.Currency = model.Currency;
             existing.BalanceAfter = model.BalanceAfter;
-            existing.DataOrigin = model.DataOrigin;
+            existing.DataOrigin = existing.DataOrigin == DataOrigin.Manual ? DataOrigin.Manual : model.DataOrigin;
         }
 
-        existing.Description = model.Description;
-        existing.AdditionalNotes = model.AdditionalNotes;
+        if (!allocationEdit)
+        {
+            existing.Description = model.Description;
+            existing.AdditionalNotes = model.AdditionalNotes;
+        }
 
         await _context.SaveChangesAsync();
         if (items != null && existing.DataOrigin == DataOrigin.Receipt)
@@ -530,8 +548,7 @@ public partial class FinanceService : IFinanceService
             await MatchTransactionsAsync(userId, new[] { existing.Id });
             await _context.SaveChangesAsync();
         }
-        return await _context.Transactions.AsNoTracking().Include(t => t.Items)
-            .FirstAsync(t => t.Id == existing.Id && t.UserId == userId);
+        return await GetTransactionAsync(existing.Id, userId);
     }
 
     private async Task ValidateTransactionWriteAsync(string userId, Transaction model)
@@ -577,7 +594,10 @@ public partial class FinanceService : IFinanceService
                                        _context.Transactions.Any(t => t.Id == ti.TransactionId && t.UserId == userId));
     }
 
-    public async Task<Guid> CreateTransactionItemAsync(string userId, TransactionItem model)
+    public Task<Guid> CreateTransactionItemAsync(string userId, TransactionItem model) =>
+        InTransactionAsync(() => CreateTransactionItemCoreAsync(userId, model));
+
+    private async Task<Guid> CreateTransactionItemCoreAsync(string userId, TransactionItem model)
     {
         // Verify the parent transaction exists and belongs to this user
         var transaction = await _context.Transactions
@@ -585,15 +605,29 @@ public partial class FinanceService : IFinanceService
         if (transaction == null)
             throw new InvalidOperationException(
                 $"Transaction with ID {model.TransactionId} not found for user {userId}.");
+        if (transaction.DataOrigin is DataOrigin.Bank or DataOrigin.Manual)
+        {
+            var detail = await _context.TransactionItems.Where(i => i.TransactionId == transaction.Id).ToListAsync();
+            var replacement = detail.Where(i => i.Origin != ItemOrigin.AutoGenerated).Select(CopyLineItem).ToList();
+            var added = CopyLineItem(model);
+            added.Id = Guid.Empty;
+            replacement.Add(added);
+            var saved = await UpdateTransactionAsync(userId, transaction, replacement);
+            return saved!.Items.Single(i => !detail.Any(old => old.Id == i.Id)).Id;
+        }
         if (transaction.DataOrigin is DataOrigin.Receipt or DataOrigin.Reconciled)
             ValidateBillLineItem(model);
 
+        model.Origin = ItemOrigin.ManualInput;
         _context.TransactionItems.Add(model);
         await _context.SaveChangesAsync();
         return model.Id;
     }
 
-    public async Task<bool> UpdateTransactionItemAsync(string userId, TransactionItem model)
+    public Task<bool> UpdateTransactionItemAsync(string userId, TransactionItem model) =>
+        InTransactionAsync(() => UpdateTransactionItemCoreAsync(userId, model));
+
+    private async Task<bool> UpdateTransactionItemCoreAsync(string userId, TransactionItem model)
     {
         var existing = await _context.TransactionItems
             .FirstOrDefaultAsync(ti => ti.Id == model.Id &&
@@ -601,6 +635,14 @@ public partial class FinanceService : IFinanceService
         if (existing == null)
             return false;
         var parent = await _context.Transactions.FirstAsync(t => t.Id == existing.TransactionId);
+        if (parent.DataOrigin is DataOrigin.Bank or DataOrigin.Manual)
+        {
+            var detail = await _context.TransactionItems.Where(i => i.TransactionId == parent.Id).ToListAsync();
+            var replacement = detail.Where(i => i.Id == model.Id || i.Origin != ItemOrigin.AutoGenerated)
+                .Select(i => CopyLineItem(i.Id == model.Id ? model : i)).ToArray();
+            await UpdateTransactionAsync(userId, parent, replacement);
+            return true;
+        }
         if (parent.DataOrigin is DataOrigin.Receipt or DataOrigin.Reconciled)
             ValidateBillLineItem(model);
 
@@ -611,11 +653,18 @@ public partial class FinanceService : IFinanceService
         existing.Quantity = model.Quantity;
         existing.PricePerUnit = model.PricePerUnit;
         existing.TotalPrice = model.TotalPrice;
-        existing.Origin = model.Origin;
+        existing.Origin = ItemOrigin.ManualInput;
 
         await _context.SaveChangesAsync();
         return true;
     }
+
+    private static TransactionItem CopyLineItem(TransactionItem item) => new()
+    {
+        Id = item.Id, TransactionId = item.TransactionId, Name = item.Name, FullName = item.FullName,
+        Category = item.Category, Subcategory = item.Subcategory, Quantity = item.Quantity,
+        PricePerUnit = item.PricePerUnit, TotalPrice = item.TotalPrice, Origin = item.Origin
+    };
 
     private static void ValidateBillLineItem(TransactionItem item)
     {
@@ -623,7 +672,10 @@ public partial class FinanceService : IFinanceService
             throw new InvalidOperationException("Line Item quantity and money fields must be non-negative and valid.");
     }
 
-    public async Task<bool> DeleteTransactionItemAsync(Guid id, string userId)
+    public Task<bool> DeleteTransactionItemAsync(Guid id, string userId) =>
+        InTransactionAsync(() => DeleteTransactionItemCoreAsync(id, userId));
+
+    private async Task<bool> DeleteTransactionItemCoreAsync(Guid id, string userId)
     {
         var entity = await _context.TransactionItems
             .FirstOrDefaultAsync(ti => ti.Id == id &&
@@ -631,6 +683,12 @@ public partial class FinanceService : IFinanceService
         if (entity == null)
             return false;
 
+        var parent = await _context.Transactions.Include(t => t.Items).FirstAsync(t => t.Id == entity.TransactionId);
+        if (parent.DataOrigin is DataOrigin.Bank or DataOrigin.Manual)
+        {
+            await UpdateTransactionAsync(userId, parent, parent.Items.Where(i => i.Id != id).Select(CopyLineItem).ToArray());
+            return true;
+        }
         _context.TransactionItems.Remove(entity);
         await _context.SaveChangesAsync();
         return true;

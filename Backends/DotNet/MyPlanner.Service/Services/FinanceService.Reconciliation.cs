@@ -53,7 +53,8 @@ public partial class FinanceService
 
         var toMerge = pairs
             .Where(p => (touchedIds.Contains(p.Bill.Id) || touchedIds.Contains(p.BankRow.Id))
-                        && !ambiguous.Contains(p.Bill.Id) && !ambiguous.Contains(p.BankRow.Id))
+                        && !ambiguous.Contains(p.Bill.Id) && !ambiguous.Contains(p.BankRow.Id)
+                        && !HasUserDetail(p.BankRow))
             .OrderBy(p => p.Bill.Timestamp!.Value)
             .ThenBy(p => p.Bill.Id)
             .ToList();
@@ -61,6 +62,36 @@ public partial class FinanceService
         foreach (var (bill, bankRow) in toMerge) MergeBillWithBankRow(bill, bankRow);
 
         return toMerge.ToDictionary(p => p.BankRow.Id, p => p.Bill.Id);
+    }
+
+    private static bool HasUserDetail(Transaction bankRow) =>
+        bankRow.Items.Any(i => i.Origin == ItemOrigin.ManualInput);
+
+    // Derived from current matching facts, not a sticky warning on every detailed Bank row.
+    // Read all candidates even when the displayed list is date/payment-method filtered.
+    private async Task PopulateReviewCandidatesAsync(IReadOnlyList<Transaction> rows, string? userId)
+    {
+        if (!rows.Any(t => t.DataOrigin == DataOrigin.Receipt || t.DataOrigin == DataOrigin.Bank && HasUserDetail(t)))
+            return;
+        var candidates = await _context.Transactions.AsNoTracking().Include(t => t.Items)
+            .Where(t => (userId == null || t.UserId == userId)
+                        && t.Type == TransactionType.Expense
+                        && (t.DataOrigin == DataOrigin.Bank || t.DataOrigin == DataOrigin.Receipt))
+            .ToListAsync();
+        foreach (var row in rows)
+        {
+            row.ReviewCandidates.Clear();
+            if (row.Type != TransactionType.Expense) continue;
+            foreach (var candidate in candidates.Where(t => t.UserId == row.UserId && t.Id != row.Id))
+            {
+                var protectedPair = row.DataOrigin == DataOrigin.Bank && HasUserDetail(row)
+                    && candidate.DataOrigin == DataOrigin.Receipt && IsMatch(candidate, row)
+                    || row.DataOrigin == DataOrigin.Receipt && candidate.DataOrigin == DataOrigin.Bank
+                    && HasUserDetail(candidate) && IsMatch(row, candidate);
+                if (protectedPair)
+                    row.ReviewCandidates.Add(new(candidate.Id, candidate.Description, candidate.Amount, candidate.Currency, candidate.Timestamp));
+            }
+        }
     }
 
     /// <summary>Whether a Bill and a statement row are the same purchase: same currency, the exact

@@ -3,77 +3,34 @@ import UploadZone from "../../components/UploadZone/UploadZone";
 import BillReportPanel from "../../components/BillReportPanel/BillReportPanel";
 import TransactionList from "../../components/TransactionList/TransactionList";
 import FinanceService from "../../services/FinanceService";
-import { backendTransactionToSavedBill, processReceiptWithDetails } from "../../hooks/useProcessReceipt";
+import { processReceiptWithDetails } from "../../hooks/useProcessReceipt";
 import type {
   BackendTransaction,
   Category,
   ReceiptData,
-  SavedBill,
 } from "../../types/receiptTypes";
-import {
-  billsForReconciliation,
-  moneyDeltaOf,
-  provisionalBillAgeDays,
-  reconciliationLabel,
-} from "../../domain/reconciliation";
+import { billsForReconciliation } from "../../domain/reconciliation";
+import { transactionSaveBody } from "../../domain/transactionDetail";
+import type { BackendPaymentMethod } from "../../types/paymentMethodTypes";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 
-/**
- * Live, data-driven shopping-bills view.
- *
- * The visual foundation is the original light showcase design (white/slate/
- * zinc-900 cards on a `bg-slate-50` page with monospace type). All of its
- * "invoice-fiction" columns (Invoice #, OCR Confidence, Tax Status) are dropped
- * because no backend field backs them — the table now renders only real data:
- * Vendor / Date / Category / Amount. Unexpanded rows keep that exact flat look;
- * clicking a row expands it inline to reveal the structured BillReportPanel.
- * Edits are staged inside each self-contained BillReportPanel while editing
- * and committed once through PUT /transactions/{id}, including the complete Line
- * Item collection. Matching happens after the complete edit, in the same commit.
- * No individual item write is fired: the panel owns staging.
- */
+/** Uploads and Bill Draft confirmation stay page-owned; saved Bills use the common card. */
 
 // Newest-first comparison: createdAt (ISO) wins, else timestamp fallback.
-function compareNewestFirst(a: SavedBill, b: SavedBill): number {
+function compareNewestFirst(a: BackendTransaction, b: BackendTransaction): number {
   const ta = a.createdAt || a.timestamp || "";
   const tb = b.createdAt || b.timestamp || "";
   return tb.localeCompare(ta);
 }
 
-function reconciliationBadge(bill: SavedBill): React.ReactNode {
-  const label = reconciliationLabel(bill);
-  if (!label) return null;
-
-  const ageDays = provisionalBillAgeDays(bill);
-  return (
-    <span className="inline-flex items-center gap-1.5 flex-wrap">
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${
-          label === "Reconciled"
-            ? "bg-emerald-100 text-emerald-700"
-            : "bg-amber-100 text-amber-700"
-        }`}
-      >
-        {label}
-      </span>
-      {ageDays !== null && label === "Provisional" && (
-        <span className="text-[10px] font-semibold text-amber-700 whitespace-nowrap">
-          No bank match · {ageDays} days
-        </span>
-      )}
-    </span>
-  );
-}
-
-// Distinct line-item categories joined by " · ", or "—" when none exist.
 export function ShoppingBillsPage() {
   const { getToken } = useAuth();
 
-  const [receipts, setReceipts] = useState<SavedBill[]>([]);
   const [listRows, setListRows] = useState<BackendTransaction[]>([]);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [methods, setMethods] = useState<BackendPaymentMethod[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,12 +42,6 @@ export function ShoppingBillsPage() {
   const [draftError, setDraftError] = useState<string | null>(null);
   const draftImageUrl = useMemo(() => billDraft ? URL.createObjectURL(billDraft.file) : null, [billDraft?.file]);
   useEffect(() => () => { if (draftImageUrl) URL.revokeObjectURL(draftImageUrl); }, [draftImageUrl]);
-  // Id of the receipt currently committing its staged edits to the server.
-  const [savingId, setSavingId] = useState<string | null>(null);
-
-  // Id of the receipt currently being removed (server-side DELETE in flight).
-  const [removingId, setRemovingId] = useState<string | null>(null);
-
   const financeService = useMemo(
     () => new FinanceService(async () => getToken({ template: "AspNetToken" })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,11 +67,7 @@ export function ShoppingBillsPage() {
         setLoadError(null);
         const all = await financeService.getTransactions();
         if (!active) return;
-        const filtered = billsForReconciliation(all);
-        setListRows(filtered);
-        const mapped = filtered.map((row) =>
-          backendTransactionToSavedBill(row, (currency) => financeService.mapCurrency(currency)));
-        setReceipts(mapped.sort(compareNewestFirst));
+        setListRows(billsForReconciliation(all).sort(compareNewestFirst));
       } catch (e) {
         if (active) setLoadError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -128,11 +75,24 @@ export function ShoppingBillsPage() {
       }
     };
 
+    void (async () => {
+      try { const list = await financeService.getPaymentMethods(); if (active) setMethods(list); }
+      catch { /* Unresolved methods are displayed as Unknown. */ }
+    })();
     void loadCategories();
     void loadReceipts();
     return () => {
       active = false;
     };
+  }, [financeService]);
+
+  const refreshRows = useCallback(async (saved: BackendTransaction) => {
+    // Update immediately, then refresh other candidate markers as well.
+    setListRows(previous => [saved, ...previous.filter(row => row.id !== saved.id)].sort(compareNewestFirst));
+    try {
+      const rows = billsForReconciliation(await financeService.getTransactions());
+      setListRows([saved, ...rows.filter(row => row.id !== saved.id)].sort(compareNewestFirst));
+    } catch { /* The save succeeded; retain its returned truth if a subsequent read fails. */ }
   }, [financeService]);
 
   // ── Upload → inject new bill at top ────────────────────────────────
@@ -178,10 +138,7 @@ export function ShoppingBillsPage() {
     setDraftError(null);
     try {
       const saved = await financeService.confirmReceipt(billDraft.file, corrected);
-      const mapCurrency = (currency: string) => financeService.mapCurrency(currency);
-      const bill = backendTransactionToSavedBill(saved, mapCurrency);
-      setReceipts((previous) => [bill, ...previous].sort(compareNewestFirst));
-      setListRows((previous) => [saved, ...previous]);
+      await refreshRows(saved);
       setBillDraft(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -190,81 +147,43 @@ export function ShoppingBillsPage() {
     } finally {
       setConfirmingDraft(false);
     }
-  }, [billDraft, financeService]);
+  }, [billDraft, financeService, refreshRows]);
 
   // One complete Bill save owns header, item additions/edits/deletions and Matching.
   const handleSave = useCallback(
-    async (bill: SavedBill, editedBill: ReceiptData) => {
-      setSavingId(bill.id);
+    async (bill: BackendTransaction, editedBill: ReceiptData) => {
       setUploadError(null);
       try {
-        const financeService = new FinanceService(async () =>
-          getToken({ template: "AspNetToken" }),
-        );
-
         // One complete save returns bank-authoritative facts if this edit reconciles the Bill.
-        const saved = await financeService.updateTransaction({
-          id: bill.id,
-          type: "Expense",
-          paymentMethodId: null,
-          toPaymentMethodId: null,
-          timestamp: editedBill.timestamp || null,
-          amount: editedBill.totalAmount,
-          currency: editedBill.currency || "UAH",
-          description: editedBill.merchantName || "",
-          additionalNotes: editedBill.additionalNotes ?? null,
-          balanceAfter: null,
-          dataOrigin: "Receipt",
-          items: editedBill.items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            fullName: item.fullName || item.name,
-            category: item.category ?? null,
-            subcategory: item.subcategory ?? null,
-            quantity: item.quantity,
-            pricePerUnit: item.unitPrice,
-            totalPrice: item.totalPrice,
-          })),
-        });
+        const saved = await financeService.updateTransaction(transactionSaveBody(bill, editedBill));
         if (!saved) throw new Error("This Bill no longer exists.");
-        const withItems = backendTransactionToSavedBill(saved, (currency) => financeService.mapCurrency(currency));
-
-        setReceipts((prev) =>
-          prev
-            .map((b) => (b.id === bill.id ? withItems : b))
-            .sort(compareNewestFirst),
-        );
-        setListRows((prev) => prev.map((row) => row.id === bill.id ? saved : row));
+        await refreshRows(saved);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setUploadError(message);
         throw e; // Keep the panel's draft open when the complete save fails.
-      } finally {
-        setSavingId(null);
       }
     },
-    [getToken],
+    [financeService, refreshRows],
   );
 
   // ── Remove transaction (top-level, immediate) ─────────────────────
-  // Fired once by BillReportPanel when the user chooses "Remove" from the ⋮
+  // Fired once by the common card when the user chooses "Remove" from the ⋮
   // menu (after a browser confirmation). Issues the transaction DELETE and
   // drops the row. This is a top-level action, never staged behind Save.
   const handleDelete = useCallback(
     async (id: string) => {
-      setRemovingId(id);
       setUploadError(null);
       try {
         await financeService.deleteTransaction(id);
 
         // Drop the row and clear its auxiliary state so nothing lingers.
-        setReceipts((prev) => prev.filter((b) => b.id !== id));
-        setListRows((prev) => prev.filter((row) => row.id !== id));
+        setListRows(previous => previous.filter(row => row.id !== id).map(row => ({
+          ...row, reviewCandidates: row.reviewCandidates?.filter(candidate => candidate.id !== id),
+        })));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setUploadError(message);
-      } finally {
-        setRemovingId(null);
       }
     },
     [financeService],
@@ -340,7 +259,7 @@ export function ShoppingBillsPage() {
         <div className="mt-6 bg-white border border-slate-300 rounded-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
             <span className="text-xs font-bold uppercase tracking-wider text-zinc-900">
-              PROCESSED RECEIPTS ({receipts.length})
+              PROCESSED RECEIPTS ({listRows.length})
             </span>
             <span className="text-[10px] text-slate-500">
               REAL DATA · SERVER-SYNCED
@@ -351,24 +270,11 @@ export function ShoppingBillsPage() {
             transactions={listRows}
             label="Processed receipts"
             emptyMessage="No shopping bills yet. Upload a receipt photo above to add your first bill."
-            renderRow={(row) => {
-              const bill = receipts.find((candidate) => candidate.id === row.id);
-              if (!bill) return null;
-              return <>
-                {removingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Removing...</div>}
-                {savingId === bill.id && <div className="flex items-center gap-2 text-xs text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> Saving changes...</div>}
-                <BillReportPanel
-                  receiptData={bill}
-                  badge={reconciliationBadge(bill)}
-                  moneyDelta={moneyDeltaOf(bill)}
-                  categories={categories}
-                  onSave={(editedBill) => handleSave(bill, editedBill)}
-                  onDelete={(id) => handleDelete(id)}
-                  currency={bill.currency}
-                  expandable={true}
-                />
-              </>;
-            }}
+            categories={categories}
+            paymentMethodName={id => methods.find(method => method.id === id)?.name || null}
+            paymentMethodCurrency={id => methods.find(method => method.id === id)?.currency || null}
+            onSave={handleSave}
+            onDelete={row => { if (window.confirm("Remove this transaction? This cannot be undone.")) void handleDelete(row.id); }}
           />
         </div>
       </div>

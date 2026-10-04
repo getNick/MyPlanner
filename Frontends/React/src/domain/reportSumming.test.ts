@@ -64,6 +64,46 @@ function receipt(overrides: Partial<BackendTransaction>, items: [string, string,
 }
 
 describe("summarizeReport — category matrix", () => {
+  it("keeps partial Bank spending complete using original MCC, and excludes remainder from Coverage", () => {
+    const bank = row({
+      dataOrigin: "Bank", amount: 100,
+      rawTransactionData: JSON.stringify({ bank: { category: "Groceries", subcategory: "Pantry" } }),
+      items: [{ ...lineItem("Dinner", "Dining & Takeaway", 30, "tx-1"), origin: "ManualInput" }],
+    });
+    const report = summarizeReport([bank], { from: null, to: null });
+    expect(report.total).toBe(100);
+    expect(report.categoryMatrix).toEqual({ "Dining & Takeaway": 30, Groceries: 70 });
+    expect(report.estimatedMatrix).toEqual({ Groceries: { Pantry: 70 } });
+    expect(report.coverage).toBe(30);
+  });
+
+  it("caps Coverage per paid record without changing receipt rollups or Money Delta", () => {
+    const report = summarizeReport([
+      receipt({ id: "receipt", dataOrigin: "Reconciled", amount: 100 }, [["Groceries", "Groceries", 120]]),
+      row({ id: "bank", dataOrigin: "Bank", amount: 100,
+        items: [{ ...lineItem("Dinner", "Dining & Takeaway", 30, "bank"), origin: "ManualInput" }] }),
+    ], { from: null, to: null });
+    expect(report.total).toBe(220);
+    expect(report.moneyDelta.total).toBe(-20);
+    expect(report.coverage).toBe(65);
+  });
+
+  it("rounds allocations and remainder consistently to currency cents", () => {
+    const report = summarizeReport([row({ dataOrigin: "Manual", amount: 20,
+      items: [{ ...lineItem("Fractional allocation", "Groceries", 10.075, "tx-1"), origin: "ManualInput" }] })], { from: null, to: null });
+    expect(report.categoryMatrix).toEqual({ Groceries: 10.08, Unallocated: 9.92 });
+    expect(report.total).toBe(20);
+  });
+
+  it("counts unknown Bank/Manual remainder as Unallocated without inventing purchased products", () => {
+    const report = summarizeReport([
+      row({ id: "bank", dataOrigin: "Bank", amount: 20 }),
+      row({ id: "manual", dataOrigin: "Manual", amount: 50,
+        items: [{ ...lineItem("Coffee", "Dining & Takeaway", 10, "manual"), origin: "ManualInput" }] }),
+    ], { from: null, to: null });
+    expect(report.categoryMatrix).toEqual({ Unallocated: 60, "Dining & Takeaway": 10 });
+    expect(report.total).toBe(70);
+  });
   it("sums each line item's price into its category", () => {
     const { categoryMatrix } = summarizeReport(
       [
@@ -85,7 +125,7 @@ describe("summarizeReport — category matrix", () => {
     expect(categoryMatrix).toEqual({ Other: 5 });
   });
 
-  it("counts a Bank Transaction's full amount under MCC classification, and keeps unknown MCC spend in Other", () => {
+  it("counts a Bank Transaction's full amount under MCC classification, and keeps unknown MCC spend in Unallocated", () => {
     const classifiedBank = row({
       id: "classified-bank",
       dataOrigin: "Bank",
@@ -101,8 +141,8 @@ describe("summarizeReport — category matrix", () => {
 
     const report = summarizeReport([classifiedBank, unclassifiedBank], { from: null, to: null });
 
-    expect(report.categoryMatrix).toEqual({ Groceries: 40, Other: 25 });
-    expect(report.categorySubcategoryMatrix).toEqual({ Groceries: { Supermarkets: 40 }, Other: { Other: 25 } });
+    expect(report.categoryMatrix).toEqual({ Groceries: 40, Unallocated: 25 });
+    expect(report.categorySubcategoryMatrix).toEqual({ Groceries: { Supermarkets: 40 }, Unallocated: { Unallocated: 25 } });
     expect(report.total).toBe(65);
   });
 
@@ -213,7 +253,7 @@ describe("summarizeReport — Money Delta rollup", () => {
       { from: null, to: null },
     );
 
-    expect(categoryMatrix).toEqual({ Groceries: 40 });
+    expect(categoryMatrix).toEqual({ Groceries: 40, Unallocated: 100 });
     expect(moneyDelta).toEqual({ total: 0, rows: 0, byTransaction: [] });
   });
 });
@@ -238,7 +278,7 @@ describe("summarizeReport — every row counted once", () => {
     expect(moneyDelta).toEqual({ total: 180, rows: 1, byTransaction: [{ id: "merged", description: "SILPO", amount: 180 }] });
   });
 
-  it("does not double-count an unmatched pair — the bank row carries no line items to sum twice", () => {
+  it("counts both unmatched records until reconciliation resolves the possible double counting", () => {
     const { categoryMatrix } = summarizeReport(
       [
         // The provisional Bill carries the line items; its unmatched Bank twin carries none, so the
@@ -249,7 +289,7 @@ describe("summarizeReport — every row counted once", () => {
       { from: null, to: null },
     );
 
-    expect(categoryMatrix).toEqual({ Groceries: 12.5 });
+    expect(categoryMatrix).toEqual({ Groceries: 12.5, Unallocated: 12.99 });
   });
 });
 

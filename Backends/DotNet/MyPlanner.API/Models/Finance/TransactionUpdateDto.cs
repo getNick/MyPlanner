@@ -28,6 +28,7 @@ public class TransactionUpdateDto
     public decimal? BalanceAfter { get; set; }
     public DataOrigin DataOrigin { get; set; }
 
-    /// <summary>Supplied means a complete Bill save; [] removes all detail. Omitted retains legacy header-only behaviour.</summary>
+    /// <summary>Supplied means a complete Expense detail save; [] removes all detail. Omitted retains legacy header-only behaviour.</summary>
     public List<BillLineItemSaveDto>? Items { get; set; }
+    public string? ExpectedDetailVersion { get; set; }
 }

@@ -586,8 +586,9 @@ public class ReconciliationTests : FinanceServiceTests_Base
         Assert.Multiple(() =>
         {
             Assert.That(result!.Items.Count, Is.EqualTo(complete ? 0 : 1));
-            Assert.That(result.DataOrigin, Is.EqualTo(complete ? DataOrigin.Reconciled : DataOrigin.Receipt));
-            Assert.That(storedBank == null, Is.EqualTo(complete));
+            Assert.That(result.Amount, Is.EqualTo(complete ? 0m : 20m), "Provisional Total is derived from saved detail");
+            Assert.That(result.DataOrigin, Is.EqualTo(DataOrigin.Receipt));
+            Assert.That(storedBank, Is.Not.Null);
         });
     }
 
@@ -690,7 +691,10 @@ public class ReconciliationTests : FinanceServiceTests_Base
         SeedBankRow(20m, At(18, 30));
         bill.Amount = 20m;
 
-        var result = await _sut.UpdateTransactionAsync(_testUserId, bill, Array.Empty<TransactionItem>());
+        var result = await _sut.UpdateTransactionAsync(_testUserId, bill, new[]
+        {
+            new TransactionItem { TransactionId = bill.Id, Name = "Corrected detail", FullName = "Corrected detail", Quantity = 1, PricePerUnit = 20m, TotalPrice = 20m }
+        });
         var storedBill = await _sut.GetTransactionAsync(historicalBill.Id, _testUserId);
         var storedBank = await _sut.GetTransactionAsync(historicalBank.Id, _testUserId);
         Assert.Multiple(() =>

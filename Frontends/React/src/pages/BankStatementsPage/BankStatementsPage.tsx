@@ -6,19 +6,18 @@ import FinanceService from "../../services/FinanceService";
 import TransactionList from "../../components/TransactionList/TransactionList";
 import type { BankStatementImportResult, BankStatementSummary } from "../../types/bankImportTypes";
 import {
-  displayCurrency,
   formatImportTargetLabel,
   isImportTarget,
   pickDefaultImportTarget,
   recalledImportTarget,
   rememberImportTarget,
 } from "../../domain/paymentMethods";
-import { carriesSeparateBaseAmount, statementRowsFor } from "../../domain/bankTransactions";
+import { statementRowsFor } from "../../domain/bankTransactions";
 import type {
-  BackendCurrency,
   BackendPaymentMethod,
 } from "../../types/paymentMethodTypes";
-import type { BackendTransaction } from "../../types/receiptTypes";
+import type { BackendTransaction, Category } from "../../types/receiptTypes";
+import { transactionSaveBody } from "../../domain/transactionDetail";
 
 /**
  * `/finance/bank` — statement import. One page, one question: which account is this file for?
@@ -51,16 +50,6 @@ function formatStatementDate(iso: string): string {
   });
 }
 
-const money = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-/** Money as money: grouped digits and the ISO 4217 spelling the ledger uses (EURO → EUR). */
-function formatMoney(value: number, currency: string): string {
-  return `${money.format(value)} ${displayCurrency(currency as BackendCurrency)}`;
-}
-
 export const BankStatementsPage: React.FC = () => {
   const { getToken } = useAuth();
   const navigate = useNavigate();
@@ -72,6 +61,7 @@ export const BankStatementsPage: React.FC = () => {
   const financeService = useMemo(() => new FinanceService(() => accessTokenRef.current()), []);
 
   const [methods, setMethods] = useState<BackendPaymentMethod[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -103,7 +93,11 @@ export const BankStatementsPage: React.FC = () => {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void (async () => {
+      try { setCategories(await financeService.getReceiptCategories()); }
+      catch { /* Backend still validates classifications if loading fails. */ }
+    })();
+  }, [load, financeService]);
 
   const targets = useMemo(() => methods.filter(isImportTarget), [methods]);
   // The account the ledger below is about: the same one the picker names, never a different one.
@@ -469,10 +463,15 @@ export const BankStatementsPage: React.FC = () => {
                   <TransactionList
                     transactions={statementRows}
                     label="Bank transactions"
-                    paymentMethodName={() => chosenTarget.name}
-                    renderAmountDetail={(row) => carriesSeparateBaseAmount(row) ? (
-                      <span className="mt-0.5 block text-[10px] text-slate-500 tabular-nums">card {formatMoney(Number(row.baseAmount), chosenTarget.currency)}</span>
-                    ) : null}
+                    paymentMethodName={id => methods.find(method => method.id === id)?.name || null}
+                    categories={categories}
+                    onSave={async (row, detail) => {
+                      const saved = await financeService.updateTransaction(transactionSaveBody(row, detail));
+                      if (!saved) throw new Error("Transaction no longer exists.");
+                      setLedger(previous => previous.map(transaction => transaction.id === saved.id ? saved : transaction));
+                      await loadLedger();
+                    }}
+                    paymentMethodCurrency={id => methods.find(method => method.id === id)?.currency || null}
                   />
                 )}
               </section>

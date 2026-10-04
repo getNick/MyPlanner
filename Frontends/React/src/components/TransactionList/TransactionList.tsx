@@ -1,79 +1,181 @@
 import React, { useState } from "react";
-import { ChevronDown, Landmark, Receipt } from "lucide-react";
+import { ChevronDown, MoreVertical } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { BackendCurrency } from "../../types/paymentMethodTypes";
 import { displayCurrency } from "../../domain/paymentMethods";
 import { provisionalBillAgeDays } from "../../domain/reconciliation";
-import type { BackendTransaction } from "../../types/receiptTypes";
+import { bankClassification, isAllocation, money, transactionToReceipt, unchangedBankSeed } from "../../domain/transactionDetail";
+import { transactionIcon } from "./transactionIcons";
+import type { BackendTransaction, Category, LineItem, ReceiptData } from "../../types/receiptTypes";
 
 interface TransactionListProps {
   transactions: BackendTransaction[];
   label: string;
   emptyMessage?: string;
+  categories?: Category[];
   paymentMethodName?: (id: string | null) => string | null;
-  renderAmountDetail?: (transaction: BackendTransaction) => React.ReactNode;
+  paymentMethodCurrency?: (id: string | null) => BackendCurrency | null;
   onDelete?: (transaction: BackendTransaction) => void;
-  renderRow?: (transaction: BackendTransaction) => React.ReactNode;
+  onSave?: (transaction: BackendTransaction, detail: ReceiptData) => Promise<void>;
+  onCorrectAmount?: (transaction: BackendTransaction, amount: number) => Promise<void>;
 }
 
 const number = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const moneyDelta = (value: number) => number.format(value);
+const control = "bg-slate-50 border border-slate-300 rounded-sm px-2 py-1 text-xs w-full focus:border-zinc-900";
+const badge = "inline-flex h-5 items-center px-2 rounded-sm text-[9px] font-bold uppercase tracking-wider";
 
-/** Shared, presentational transaction list. Selection, loading, and mutations belong to callers. */
-export default function TransactionList({
-  transactions,
-  label,
-  emptyMessage = "No transactions yet.",
-  paymentMethodName,
-  renderAmountDetail,
-  onDelete,
-  renderRow,
-}: TransactionListProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+/** Saved Transactions have one rendering/editing path; page containers own I/O and membership. */
+export default function TransactionList({ transactions, label, emptyMessage, ...capabilities }: TransactionListProps) {
+  return <ul aria-label={label} className="flex flex-col gap-3 p-4 font-mono">
+    {transactions.length === 0
+      ? <li className="px-5 py-12 text-center text-xs text-slate-500">{emptyMessage || "No transactions yet."}</li>
+      : transactions.map(row => <TransactionCard key={row.id} row={row} {...capabilities} />)}
+  </ul>;
+}
 
-  return (
-    <ul aria-label={label} className="flex flex-col gap-3 p-4">
-      {transactions.length === 0 ? (
-        <li className="px-5 py-12 text-center text-xs text-slate-500">{emptyMessage}</li>
-      ) : transactions.map((transaction) => {
-        if (renderRow) return <li key={transaction.id}>{renderRow(transaction)}</li>;
-        const canExpand = transaction.items.length > 0 && (transaction.dataOrigin === "Receipt" || transaction.dataOrigin === "Reconciled");
-        const isExpanded = expanded[transaction.id] ?? false;
-        const age = transaction.dataOrigin === "Receipt" ? provisionalBillAgeDays(transaction) : null;
-        const method = paymentMethodName?.(transaction.paymentMethodId);
-        return (
-          <li key={transaction.id} className="bg-slate-50 border border-slate-300 rounded-sm px-5 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {transaction.dataOrigin === "Bank" ? <Landmark className="w-4 h-4 text-slate-500 shrink-0" /> : <Receipt className="w-4 h-4 text-slate-500 shrink-0" />}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {canExpand ? (
-                      <button type="button" aria-expanded={isExpanded} aria-controls={`items-${transaction.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [transaction.id]: !isExpanded }))} className="text-sm font-bold text-zinc-900 uppercase tracking-tight truncate text-left hover:underline">
-                        {transaction.description || "Unnamed transaction"}<ChevronDown className={`w-3.5 h-3.5 inline-block ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                      </button>
-                    ) : <span className="text-sm font-bold text-zinc-900 uppercase tracking-tight truncate">{transaction.description || "Unnamed transaction"}</span>}
-                    {transaction.dataOrigin === "Reconciled" && <span className="px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider">Reconciled</span>}
-                    {transaction.dataOrigin === "Receipt" && <span className="px-2 py-0.5 rounded-sm bg-amber-100 text-amber-700 text-[9px] font-bold uppercase tracking-wider">Provisional</span>}
-                    {transaction.dataOrigin === "Manual" && <span className="px-2 py-0.5 rounded-sm bg-slate-200 text-slate-700 text-[9px] font-bold uppercase tracking-wider">Manual</span>}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {transaction.timestamp ? new Date(transaction.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "No date"}
-                    {method ? ` · ${method}` : ""}
-                    {transaction.dataOrigin === "Bank" ? " · Bank" : transaction.dataOrigin === "Receipt" ? " · Receipt" : transaction.dataOrigin === "Manual" ? " · Manual" : ""}
-                  </div>
-                  {age !== null && <div className="text-[10px] font-semibold text-amber-700 mt-1">No bank match · {age} days</div>}
-                </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <span className="text-sm font-bold text-zinc-900 tabular-nums">{transaction.type === "Expense" ? "−" : transaction.type === "Income" ? "+" : ""}{number.format(transaction.amount)} <span className="text-[10px] text-slate-500">{displayCurrency(transaction.currency)}</span></span>
-                {renderAmountDetail?.(transaction)}
-                {onDelete && <button type="button" onClick={() => onDelete(transaction)} className="block mt-1 text-[10px] text-slate-500 hover:text-rose-700">Delete</button>}
-                {transaction.dataOrigin === "Reconciled" && transaction.moneyDelta !== null && <span className="block mt-1 text-[10px] font-semibold text-amber-700 tabular-nums">Money Delta · {moneyDelta(transaction.moneyDelta)} {displayCurrency(transaction.currency)}</span>}
-              </div>
-            </div>
-            {canExpand && <ul id={`items-${transaction.id}`} aria-label={`Line Items for ${transaction.description}`} hidden={!isExpanded} className="mt-3 border-t border-slate-200 pt-2 space-y-1">{transaction.items.map((item) => <li key={item.id} className="flex justify-between gap-3 text-xs text-slate-600"><span>{item.quantity}× {item.name}</span><span className="tabular-nums">{number.format(item.totalPrice)} {displayCurrency(transaction.currency)}</span></li>)}</ul>}
-          </li>
-        );
-      })}
-    </ul>
-  );
+function TransactionCard({ row, categories = [], paymentMethodName, paymentMethodCurrency, onDelete, onSave, onCorrectAmount }: Omit<TransactionListProps, "transactions" | "label" | "emptyMessage"> & { row: BackendTransaction }) {
+  const [expanded, setExpanded] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [draft, setDraft] = useState<ReceiptData | null>(null);
+  // Keep the opening snapshot, including its server version, even if the page refreshes mid-edit.
+  const [editingRow, setEditingRow] = useState<BackendTransaction | null>(null);
+  const [correction, setCorrection] = useState<{ row: BackendTransaction; value: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const detail = draft || transactionToReceipt(row);
+  const allocation = isAllocation(row);
+  const total = money(detail.items.reduce((sum, item) => sum + money(draft ? item.unitPrice * item.quantity : item.totalPrice), 0));
+  const paid = Math.abs(row.amount);
+  const currency = draft && row.dataOrigin === "Receipt" ? draft.currency || displayCurrency(row.currency) : displayCurrency(row.currency);
+  const unchangedSeed = unchangedBankSeed(editingRow || row, detail.items);
+  const allocated = unchangedSeed ? 0 : money(detail.items
+    .filter(item => item.origin !== "AutoGenerated")
+    .reduce((sum, item) => sum + money(draft ? item.unitPrice * item.quantity : item.totalPrice), 0));
+  const remainder = money(Math.max(0, paid - allocated));
+  const delta = draft && row.dataOrigin === "Reconciled" ? money(paid - total) : row.moneyDelta;
+  const source = bankClassification(row);
+  const cardCurrency = paymentMethodCurrency?.(row.paymentMethodId);
+  const canEdit = !!onSave && row.type === "Expense" && !correction;
+  const age = row.dataOrigin === "Receipt" ? provisionalBillAgeDays(row) : null;
+  const iconRow = draft ? { ...row, items: draft.items.map((item, i) => ({
+    id: item.id || String(i), transactionId: row.id, name: item.name, fullName: item.fullName,
+    category: item.category ?? null, subcategory: item.subcategory ?? null, quantity: item.quantity,
+    pricePerUnit: item.unitPrice, totalPrice: item.totalPrice, origin: item.origin || "ManualInput",
+  })) } : row;
+  const icon = transactionIcon(iconRow);
+  const updateItem = (index: number, changes: Partial<LineItem>) => {
+    if (!draft) return;
+    const items = draft.items.map((item, i) => {
+      if (i !== index) return item;
+      const next = { ...item, ...changes };
+      const changed = Object.entries(changes).some(([field, value]) => item[field as keyof LineItem] !== value);
+      return { ...next, totalPrice: money(next.unitPrice * next.quantity), origin: changed ? "ManualInput" : item.origin };
+    });
+    setDraft({ ...draft, items });
+  };
+  const commit = async (write: () => Promise<void>, finish: () => void) => {
+    if (saving) return;
+    setSaving(true); setError(null);
+    try {
+      await write();
+      finish();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally { setSaving(false); }
+  };
+  const save = () => {
+    if (!draft || !editingRow || !onSave) return;
+    void commit(() => onSave(editingRow, { ...draft, totalAmount: row.dataOrigin === "Receipt" ? total : paid }),
+      () => { setDraft(null); setEditingRow(null); });
+  };
+  return <li className="bg-slate-50 border border-slate-300 rounded-sm">
+    <div className="px-5 py-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <span role="img" aria-label={icon.label} title={icon.label} className={`shrink-0 ${icon.color}`}><FontAwesomeIcon icon={icon.icon} className="w-5 h-5" /></span>
+          <button type="button" aria-expanded={expanded} aria-controls={`items-${row.id}`} onClick={() => setExpanded(!expanded)} className="text-sm font-bold text-zinc-900 uppercase tracking-tight truncate text-left hover:underline">{row.description || "Unnamed transaction"}</button>
+        </div>
+        <div className="flex items-center gap-3 shrink-0" onClick={event => event.stopPropagation()}>
+          <div className="text-right">
+            <span className="text-sm font-bold text-zinc-900 tabular-nums">{row.type === "Expense" ? "−" : row.type === "Income" ? "+" : ""}{number.format(draft && row.dataOrigin === "Receipt" ? total : paid)} <span className="text-[10px] text-slate-500">{currency}</span></span>
+            {row.baseAmount != null && (row.baseAmount !== row.amount || cardCurrency !== row.currency) && <span className="block text-[10px] text-slate-500">Card amount · {number.format(row.baseAmount)} {cardCurrency ? displayCurrency(cardCurrency) : "(currency unknown)"}</span>}
+            {row.dataOrigin === "Reconciled" && delta != null && Math.abs(delta) >= 0.1 && <span className="block text-[10px] font-semibold text-amber-700">Money Delta · {number.format(delta)} {displayCurrency(row.currency)}</span>}
+          </div>
+          <button type="button" title={expanded ? "Collapse report" : "Expand report"} aria-label={expanded ? "Collapse report" : "Expand report"} aria-expanded={expanded} aria-controls={`items-${row.id}`} onClick={() => setExpanded(!expanded)} className="p-1 text-slate-500"><ChevronDown className={`w-4 h-4 ${expanded ? "rotate-180" : ""}`} /></button>
+          {draft ? <div className="flex gap-2 text-xs">
+            <button type="button" disabled={saving} onClick={() => { setDraft(null); setEditingRow(null); setError(null); }} className="border border-slate-300 rounded-sm px-2 py-1">Cancel</button>
+            <button type="button" disabled={saving || (allocation && total > money(paid)) || (row.dataOrigin === "Receipt" && !draft.timestamp)} onClick={save} className="bg-emerald-700 text-white rounded-sm px-2 py-1">{saving ? "Saving…" : "Save"}</button>
+          </div> : (canEdit || onDelete) && <div className="relative">
+            <button type="button" title="More options" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} className="p-1 text-slate-500"><MoreVertical className="w-4 h-4" /></button>
+            {menu && <div className="absolute right-0 z-10 bg-white border border-slate-300 rounded-sm min-w-[100px] text-xs">
+              {canEdit && <button type="button" className="block w-full text-left px-3 py-2 hover:bg-slate-100" onClick={() => { setDraft(transactionToReceipt(row)); setEditingRow(row); setExpanded(true); setMenu(false); setError(null); }}>Edit</button>}
+              {onDelete && <button type="button" className="block w-full text-left px-3 py-2 text-rose-700" onClick={() => { setMenu(false); onDelete(row); }}>Remove</button>}
+            </div>}
+          </div>}
+        </div>
+      </div>
+      <div className="flex items-center flex-wrap gap-2 mt-2 text-xs text-slate-500">
+        <span>{row.timestamp ? new Date(row.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "No date"}</span>
+        <span className={`${badge} bg-slate-200 text-slate-700`}>{paymentMethodName?.(row.paymentMethodId) || "Unknown Payment Method"}</span>
+        <span className={`${badge} ${row.dataOrigin === "Reconciled" ? "bg-emerald-100 text-emerald-700" : row.dataOrigin === "Receipt" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700"}`}>{row.dataOrigin === "Receipt" ? "Provisional" : row.dataOrigin}</span>
+        {age != null && <span className="text-[10px] text-amber-700">No bank match · {age} days</span>}
+        {!!row.reviewCandidates?.length && <span className={`${badge} bg-amber-100 text-amber-800`}>Needs review</span>}
+      </div>
+      {!!row.reviewCandidates?.length && <p className="mt-2 text-xs text-amber-800">Possible double counting: {row.reviewCandidates.map(candidate => `${candidate.description} · ${number.format(candidate.amount)} ${displayCurrency(candidate.currency)}`).join("; ")}. User-provided Bank detail prevents automatic merging; both Transactions remain separate.</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p>}
+    </div>
+    <div id={`items-${row.id}`} hidden={!expanded} className="border-t border-slate-300 bg-white p-5">
+      {expanded && <>
+      {draft && !allocation && <div className="flex flex-wrap gap-3 mb-4">
+        <label className="text-xs">Merchant<input aria-label="Merchant" className={control} value={draft.merchantName || ""} onChange={e => setDraft({ ...draft, merchantName: e.target.value })} /></label>
+        {row.dataOrigin === "Receipt" && <>
+          <label className="text-xs">Timestamp<input type="datetime-local" className={control} value={localTimestamp(draft.timestamp)} onChange={e => setDraft({ ...draft, timestamp: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+          <label className="text-xs">Currency<select className={control} value={draft.currency} onChange={e => setDraft({ ...draft, currency: e.target.value })}>{["UAH", "USD", "EUR"].map(currency => <option key={currency}>{currency}</option>)}</select></label>
+        </>}
+        <label className="text-xs">Notes<input className={control} value={draft.additionalNotes || ""} onChange={e => setDraft({ ...draft, additionalNotes: e.target.value })} /></label>
+      </div>}
+      {!draft && row.additionalNotes && <p className="mb-3 text-xs text-slate-600">{row.additionalNotes}</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full table-fixed text-xs text-left">
+          <colgroup><col className="w-[25%]" /><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[14%]" /><col className="w-[10%]" /><col className="w-[14%]" />{draft && <col className="w-8" />}</colgroup>
+          <thead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200"><tr>{["Name", "Category", "Subcategory", "Price", "Qty", "Cost"].map((name, i) => <th key={name} scope="col" className={`p-2 ${i > 2 ? "text-right" : ""}`}>{name}</th>)}{draft && <th scope="col"><span className="sr-only">Remove</span></th>}</tr></thead>
+          <tbody className="divide-y divide-slate-100">{detail.items.map((item, index) => <tr key={item.id || `new-${index}`}>
+            <td className="p-2">{draft ? <input className={control} aria-label={`Edit item ${index + 1} name`} value={item.name} onChange={e => updateItem(index, { name: e.target.value })} /> : <span className="font-bold text-zinc-900">{item.name}</span>}
+              <span className="block text-[9px] text-slate-500">{unchangedSeed || item.origin === "AutoGenerated" ? (row.dataOrigin === "Bank" ? "Bank-derived · assumed" : "Generated classification · assumed") : item.origin === "ReceiptParsed" ? "Receipt-derived" : draft ? "User-provided · staged" : "User-provided"}</span>
+            </td>
+            <td className="p-2">{draft ? <select className={control} aria-label={`Edit item ${index + 1} category`} value={item.category || ""} onChange={e => updateItem(index, { category: e.target.value || undefined, subcategory: undefined })}><option value="">—</option>{categories.map(category => <option key={category.name}>{category.name}</option>)}</select> : item.category || "—"}</td>
+            <td className="p-2">{draft ? <select className={control} aria-label={`Edit item ${index + 1} subcategory`} value={item.subcategory || ""} onChange={e => updateItem(index, { subcategory: e.target.value || undefined })}><option value="">—</option>{(categories.find(category => category.name === item.category)?.subcategories || []).map(subcategory => <option key={subcategory}>{subcategory}</option>)}</select> : item.subcategory || "—"}</td>
+            <td className="p-2 text-right tabular-nums">{draft ? <input type="number" min="0" step="0.01" className={`${control} text-right min-w-[70px]`} aria-label={`Edit item ${index + 1} price`} value={item.unitPrice} onChange={e => updateItem(index, { unitPrice: Number(e.target.value) })} /> : number.format(item.unitPrice)}</td>
+            <td className="p-2 text-right tabular-nums">{draft ? <input type="number" min="0" step="any" className={`${control} text-right min-w-[50px]`} aria-label={`Edit item ${index + 1} quantity`} value={item.quantity} onChange={e => updateItem(index, { quantity: Number(e.target.value) })} /> : item.quantity}</td>
+            <td className="p-2 text-right tabular-nums font-semibold text-emerald-700">{number.format(item.totalPrice)}</td>
+            {draft && <td><button type="button" aria-label={`Delete ${item.name} row`} onClick={() => setDraft({ ...draft, items: draft.items.filter((_, i) => i !== index) })} className="text-rose-700 px-2">×</button></td>}
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {!detail.items.length && !draft && <p className="text-xs text-slate-500 py-3">No Line Items.</p>}
+      {draft && <button type="button" className="mt-4 w-full border border-dashed border-slate-300 rounded-sm py-2 text-xs text-slate-500" onClick={() => {
+        // Adding genuine allocations replaces, rather than adds to, a full-amount inferred placeholder.
+        const seedUnchanged = unchangedBankSeed(editingRow || row, draft.items);
+        setDraft({ ...draft, items: [...(seedUnchanged ? [] : draft.items), { name: "", fullName: "", quantity: 1, unitPrice: 0, totalPrice: 0, origin: "ManualInput" }] });
+      }}>Add Item Row</button>}
+      {allocation && row.type === "Expense" && remainder > 0 && <p className="mt-3 text-xs text-amber-800">Unallocated spending · {number.format(remainder)} {displayCurrency(row.currency)} · {source.category} / {source.subcategory} · estimated</p>}
+      {draft && allocation && total > money(paid) && <p role="alert" className="mt-3 text-xs text-rose-700">Allocations cannot exceed the paid amount.</p>}
+      {!draft && row.dataOrigin === "Manual" && row.type === "Expense" && onCorrectAmount && <div className="mt-4 text-xs">
+        {correction ? <div className="flex flex-wrap items-center gap-2">
+          <label>Paid amount ({currency})<input type="number" min={allocated} step="0.01" aria-label="Correct paid amount" className={control} value={correction.value} onChange={event => setCorrection({ ...correction, value: event.target.value })} /></label>
+          <button type="button" disabled={saving || !correction.value || !Number.isFinite(Number(correction.value)) || money(Number(correction.value)) < allocated} className="border border-slate-300 rounded-sm px-2 py-1" onClick={() => void commit(() => onCorrectAmount(correction.row, Number(correction.value)), () => setCorrection(null))}>Confirm amount correction</button>
+          <button type="button" disabled={saving} onClick={() => { setCorrection(null); setError(null); }}>Cancel correction</button>
+          <span className="text-slate-500">Saved Line Items stay unchanged.</span>
+        </div> : <button type="button" className="border border-slate-300 rounded-sm px-2 py-1" onClick={() => { setCorrection({ row, value: String(paid) }); setError(null); }}>Correct Manual amount</button>}
+      </div>}
+      </>}
+    </div>
+  </li>;
+}
+
+function localTimestamp(iso?: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
