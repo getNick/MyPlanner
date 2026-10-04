@@ -470,7 +470,13 @@ export default function FinanceDashboardPage() {
 
   const filteredTransactions = useMemo(() => {
     const visibleIds = new Set(filteredBills.map((bill) => bill.id));
-    return transactions.filter((transaction) => visibleIds.has(transaction.id));
+    return transactions
+      .filter((transaction) => visibleIds.has(transaction.id))
+      .sort((a, b) => {
+        const dateA = a.timestamp || a.createdAt || "";
+        const dateB = b.timestamp || b.createdAt || "";
+        return dateB.localeCompare(dateA);
+      });
   }, [transactions, filteredBills]);
 
   // Indulgence warning algorithms
