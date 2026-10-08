@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 interface UploadZoneProps {
-  onImageSelected: (file: File) => void;
+  onImagesSelected: (files: File[]) => void;
   isLoading: boolean;
   loadingStep: string;
   error: string | null;
@@ -19,7 +19,7 @@ interface UploadZoneProps {
 }
 
 export default function UploadZone({
-  onImageSelected,
+  onImagesSelected,
   isLoading,
   loadingStep,
   error,
@@ -41,20 +41,20 @@ export default function UploadZone({
   const hasImage = !!previewUrl;
   const imageUrl = previewUrl;
 
-  const processFile = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      const message = "Please upload an image file (PNG, JPEG, WEBP)."
+  const processFiles = (files: File[]) => {
+    if (isLoading) return;
+    const images = files.filter(file => file.type.startsWith("image/"));
+    const rejected = files.filter(file => !file.type.startsWith("image/"));
+    if (rejected.length) {
+      const message = `Please select image files only. Rejected: ${rejected.map(file => file.name).join(", ")}`;
       if (onFileTypeError) onFileTypeError(message);
       else alert(message);
-      return;
     }
-
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    onImageSelected(file);
+    if (!images.length) return;
+    const file = images[0];
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    onImagesSelected(images);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -69,15 +69,12 @@ export default function UploadZone({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files?.length) processFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
+    if (e.target.files?.length) processFiles(Array.from(e.target.files));
+    e.target.value = "";
   };
 
   const triggerFileSelect = () => {
@@ -103,6 +100,7 @@ export default function UploadZone({
         <input
           id="file-input"
           type="file"
+          multiple
           ref={fileInputRef}
           onChange={handleFileChange}
           accept="image/*"

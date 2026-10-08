@@ -1,6 +1,15 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import ShoppingBillsPage from "./ShoppingBillsPage";
+
+function render(ui: React.ReactElement) {
+  const router = createMemoryRouter([
+    { path: "/bills", element: ui },
+    { path: "/next", element: <div>Next page</div> },
+  ], { initialEntries: ["/bills"] });
+  return { ...rtlRender(<RouterProvider router={router} />), router };
+}
 
 // The view needs a token and a finance client; both are mocked so the test
 // exercises the component's own delete/cleanup logic, not the network. The
@@ -8,6 +17,8 @@ import ShoppingBillsPage from "./ShoppingBillsPage";
 // module-level jest.fn.s, so `new FinanceService(...)` (as the component does)
 // reliably exposes them for both setup and assertions.
 const mockGetTransactions = jest.fn();
+const mockPreviewReceipt = jest.fn();
+const mockConfirmReceipt = jest.fn();
 const mockGetReceiptCategories = jest.fn();
 const mockGetTransactionItems = jest.fn();
 const mockMapCurrency = jest.fn((c: string) => c);
@@ -27,6 +38,8 @@ jest.mock("@clerk/clerk-react", () => {
 jest.mock("../../services/FinanceService", () => {
   class MockFinanceService {
     getTransactions = mockGetTransactions;
+    previewReceipt = mockPreviewReceipt;
+    confirmReceipt = mockConfirmReceipt;
     getReceiptCategories = mockGetReceiptCategories;
     getTransactionItems = mockGetTransactionItems;
     mapCurrency = mockMapCurrency;
@@ -60,6 +73,12 @@ const SAMPLE_RECEIPT = {
 describe("ShoppingBillsPage — reconciliation visibility", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    URL.createObjectURL = jest.fn(() => "blob:test");
+    URL.revokeObjectURL = jest.fn();
+    Object.defineProperty(window, "crypto", { configurable: true, value: { subtle: { digest: async (_algorithm: string, data: ArrayBuffer) => {
+      const bytes = Array.from(new Uint8Array(data));
+      return new Uint8Array([...bytes, ...Array(Math.max(0, 32 - bytes.length)).fill(0)]).buffer;
+    } } } });
     const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
     mockGetTransactions.mockResolvedValue([
       { ...SAMPLE_RECEIPT, id: "tx-provisional", timestamp: daysAgo(8) },
@@ -91,6 +110,209 @@ describe("ShoppingBillsPage — reconciliation visibility", () => {
 });
 
 describe("ShoppingBillsPage — complete Bill save", () => {
+  it("warns during idle failed review and removes the before-unload listener after End review", async () => {
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockPreviewReceipt.mockRejectedValue(new Error("Unreadable image"));
+    const removeSpy = jest.spyOn(window, "removeEventListener");
+    render(<ShoppingBillsPage />);
+    await screen.findByText("PROCESSED RECEIPTS (0)");
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, {
+      target: { files: [new File(["bad"], "bad.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByText(/Failed: Unreadable image/);
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+    window.confirm = jest.fn().mockReturnValue(true);
+    fireEvent.click(screen.getByText("End review"));
+    await screen.findByText("Upload your Receipt Image");
+    expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+    removeSpy.mockRestore();
+  });
+
+  it("keeps the active Bill Draft and corrections when route departure is canceled", async () => {
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockPreviewReceipt.mockResolvedValue({
+      merchantName: "Original", timestamp: "2024-05-01T10:30:00Z", totalAmount: 10, currency: "UAH", items: [],
+    });
+    window.confirm = jest.fn().mockReturnValue(false);
+    const { router } = render(<ShoppingBillsPage />);
+    await screen.findByText("PROCESSED RECEIPTS (0)");
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, {
+      target: { files: [new File(["bill"], "bill.jpg", { type: "image/jpeg" })] },
+    });
+    const merchant = await screen.findByDisplayValue("Original");
+    fireEvent.change(merchant, { target: { value: "Corrected" } });
+    await act(async () => router.navigate("/next"));
+    expect(await screen.findByDisplayValue("Corrected")).toBeTruthy();
+    expect(screen.getByText("Bill Draft · not saved · bill.jpg")).toBeTruthy();
+  });
+
+  it("confirms route departure and ignores extraction responses from the abandoned queue", async () => {
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    let resolvePreview!: (value: unknown) => void;
+    mockPreviewReceipt.mockImplementation(() => new Promise(resolve => { resolvePreview = resolve; }));
+    window.confirm = jest.fn().mockReturnValue(true);
+    const { router } = render(<ShoppingBillsPage />);
+    await screen.findByText("PROCESSED RECEIPTS (0)");
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, {
+      target: { files: [new File(["bill"], "abandoned.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(1));
+    await act(async () => router.navigate("/next"));
+    expect(await screen.findByText("Next page")).toBeTruthy();
+    await act(async () => resolvePreview({ merchantName: "Late result", totalAmount: 1, currency: "UAH", items: [] }));
+    expect(screen.queryByText("Late result")).toBeNull();
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Saved Bills will remain"));
+  });
+
+  it("accepts multiple images and extracts sequentially while the first Bill Draft is under review", async () => {
+    jest.clearAllMocks();
+    URL.createObjectURL = jest.fn(() => "blob:bill-image");
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    const first = new File(["first"], "first.jpg", { type: "image/jpeg" });
+    const second = new File(["second"], "second.jpg", { type: "image/jpeg" });
+    let resolveFirst!: (value: unknown) => void;
+    let resolveSecond!: (value: unknown) => void;
+    mockPreviewReceipt.mockImplementation((file: File) => file === first
+      ? new Promise(resolve => { resolveFirst = resolve; })
+      : new Promise(resolve => { resolveSecond = resolve; }));
+
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("PROCESSED RECEIPTS (0)")).toBeTruthy();
+    const picker = document.querySelector<HTMLInputElement>('#file-input')!;
+    fireEvent.change(picker, { target: { files: [first, second] } });
+
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(1));
+    expect(mockPreviewReceipt).toHaveBeenCalledWith(first);
+    expect(screen.getByText(/1 extracting · 1 waiting/)).toBeTruthy();
+
+    await act(async () => resolveFirst({
+      merchantName: "First shop", timestamp: "2024-05-01T10:30:00Z", totalAmount: 10,
+      currency: "UAH", items: [{ name: "Apples", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+    }));
+
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(2));
+    expect(mockPreviewReceipt).toHaveBeenNthCalledWith(2, second);
+    expect(await screen.findByText("Bill Draft · not saved · first.jpg")).toBeTruthy();
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+    expect(zoomIn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(zoomIn);
+    expect(screen.getByRole("button", { name: "Zoom out" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("Zoomed Bill Image; scroll to inspect").getAttribute("tabindex")).toBe("0");
+    expect(screen.getByText("second.jpg")).toBeTruthy();
+    expect(screen.getByText(/1 ready/)).toBeTruthy();
+    await act(async () => resolveSecond({ merchantName: "Second shop", totalAmount: 20, currency: "UAH", items: [] }));
+    await waitFor(() => expect(screen.getByText(/2 ready/)).toBeTruthy());
+    fireEvent.click(screen.getByText("second.jpg"));
+    expect(screen.getByRole("button", { name: "Zoom in" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByDisplayValue("Second shop")).toBeTruthy();
+    fireEvent.change(screen.getByDisplayValue("Second shop"), { target: { value: "Corrected second shop" } });
+    fireEvent.click(screen.getByText("first.jpg"));
+    fireEvent.click(screen.getByText("second.jpg"));
+    expect(screen.getByDisplayValue("Corrected second shop")).toBeTruthy();
+  });
+
+  it("continues after extraction failure and retries the same entry", async () => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    const first = new File(["first"], "first.jpg", { type: "image/jpeg" });
+    const second = new File(["second"], "second.jpg", { type: "image/jpeg" });
+    mockPreviewReceipt.mockRejectedValueOnce(new Error("Unreadable image"))
+      .mockResolvedValueOnce({ merchantName: "Second shop", totalAmount: 20, currency: "UAH", items: [] })
+      .mockResolvedValue({ merchantName: "Recovered shop", totalAmount: 10, currency: "UAH", items: [] });
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("PROCESSED RECEIPTS (0)")).toBeTruthy();
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, { target: { files: [first, second] } });
+    expect(await screen.findByText("second.jpg")).toBeTruthy();
+    expect(await screen.findByText(/Failed: Unreadable image/)).toBeTruthy();
+    expect(mockPreviewReceipt).toHaveBeenNthCalledWith(1, first);
+    expect(mockPreviewReceipt).toHaveBeenNthCalledWith(2, second);
+    fireEvent.click(screen.getByText("Retry"));
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(3));
+    expect(mockPreviewReceipt).toHaveBeenNthCalledWith(3, first);
+    await waitFor(() => expect(screen.getByText("first.jpg").hasAttribute("disabled")).toBe(false));
+    fireEvent.click(screen.getByText("first.jpg"));
+    expect(await screen.findByDisplayValue("Recovered shop")).toBeTruthy();
+  });
+
+  it("ends review and ignores an extraction result from the discarded set", async () => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    const abandoned = new File(["old"], "old.jpg", { type: "image/jpeg" });
+    const current = new File(["new"], "new.jpg", { type: "image/jpeg" });
+    let resolveOld!: (value: unknown) => void;
+    let resolveNew!: (value: unknown) => void;
+    mockPreviewReceipt.mockImplementation((file: File) => new Promise(resolve => {
+      if (file === abandoned) resolveOld = resolve; else resolveNew = resolve;
+    }));
+    window.confirm = jest.fn(() => true);
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("PROCESSED RECEIPTS (0)")).toBeTruthy();
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, { target: { files: [abandoned] } });
+    expect(await screen.findByText("End review")).toBeTruthy();
+    fireEvent.click(screen.getByText("End review"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Saved Bills will remain"));
+    expect(await screen.findByText("Upload your Receipt Image")).toBeTruthy();
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, { target: { files: [current] } });
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(2));
+    await act(async () => resolveNew({ merchantName: "Current shop", timestamp: "2024-05-01T10:30:00Z", totalAmount: 1, currency: "UAH", items: [] }));
+    expect(await screen.findByText("Bill Draft · not saved · new.jpg")).toBeTruthy();
+    await act(async () => resolveOld({ merchantName: "Abandoned", totalAmount: 1, currency: "UAH", items: [] }));
+    expect(screen.queryByText("Bill Draft · not saved · old.jpg")).toBeNull();
+    expect(screen.getByDisplayValue("Current shop")).toBeTruthy();
+  });
+
+  it("accepts valid images from a mixed dropped selection in order and reports rejected filenames", async () => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    const first = new File(["first"], "first.jpg", { type: "image/jpeg" });
+    const invalid = new File(["text"], "notes.txt", { type: "text/plain" });
+    const last = new File(["last"], "last.png", { type: "image/png" });
+    let resolveFirst!: (value: unknown) => void;
+    mockPreviewReceipt.mockImplementation((file: File) => file === first
+      ? new Promise(resolve => { resolveFirst = resolve; })
+      : Promise.resolve({ merchantName: "Last", totalAmount: 1, currency: "UAH", items: [] }));
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("PROCESSED RECEIPTS (0)")).toBeTruthy();
+    fireEvent.drop(document.querySelector("#dropzone")!, { dataTransfer: { files: [first, invalid, last] } });
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(1));
+    expect(mockPreviewReceipt).toHaveBeenCalledWith(first);
+    expect(await screen.findByText(/Rejected: notes.txt/)).toBeTruthy();
+    await act(async () => resolveFirst({ merchantName: "First", timestamp: "2024-05-01T10:30:00Z", totalAmount: 1, currency: "UAH", items: [] }));
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(2));
+    expect(mockPreviewReceipt).toHaveBeenNthCalledWith(2, last);
+  });
+
+  it("remembers exact image content across sets without relying on filenames", async () => {
+    jest.clearAllMocks();
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetReceiptCategories.mockResolvedValue([]);
+    mockPreviewReceipt.mockRejectedValue(new Error("Unreadable"));
+    window.confirm = jest.fn(() => true);
+    render(<ShoppingBillsPage />);
+    expect(await screen.findByText("PROCESSED RECEIPTS (0)")).toBeTruthy();
+    const original = new File(["same bytes"], "original.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, { target: { files: [original] } });
+    expect(await screen.findByText("End review")).toBeTruthy();
+    fireEvent.click(screen.getByText("End review"));
+    const duplicate = new File(["same bytes"], "renamed.jpg", { type: "image/jpeg" });
+    fireEvent.change(await waitFor(() => document.querySelector<HTMLInputElement>("#file-input")!), { target: { files: [duplicate] } });
+    expect(await screen.findByText(/Duplicate images not added: renamed.jpg/)).toBeTruthy();
+    expect(mockPreviewReceipt).toHaveBeenCalledTimes(1);
+    const differentContent = new File(["different bytes"], "original.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector<HTMLInputElement>("#file-input")!, { target: { files: [differentContent] } });
+    expect(await screen.findByText("original.jpg")).toBeTruthy();
+    await waitFor(() => expect(mockPreviewReceipt).toHaveBeenCalledTimes(2));
+  });
+
   it("saves the complete draft once and displays the surviving Reconciled Bill", async () => {
     jest.clearAllMocks();
     const item = {

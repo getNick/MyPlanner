@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import UploadZone from "../../components/UploadZone/UploadZone";
 import BillReportPanel from "../../components/BillReportPanel/BillReportPanel";
+import BillImageViewer from "../../components/BillImageViewer/BillImageViewer";
 import TransactionList from "../../components/TransactionList/TransactionList";
 import FinanceService from "../../services/FinanceService";
 import { processReceiptWithDetails } from "../../hooks/useProcessReceipt";
@@ -14,6 +15,7 @@ import { transactionSaveBody } from "../../domain/transactionDetail";
 import type { BackendPaymentMethod } from "../../types/paymentMethodTypes";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
+import { unstable_usePrompt as usePrompt } from "react-router-dom";
 
 /** Uploads and Bill Draft confirmation stay page-owned; saved Bills use the common card. */
 
@@ -22,6 +24,21 @@ function compareNewestFirst(a: BackendTransaction, b: BackendTransaction): numbe
   const ta = a.createdAt || a.timestamp || "";
   const tb = b.createdAt || b.timestamp || "";
   return tb.localeCompare(ta);
+}
+
+async function imageContentHash(file: File): Promise<string> {
+  const bytes = typeof file.arrayBuffer === "function"
+    ? await file.arrayBuffer()
+    : await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read image."));
+        reader.onload = () => reader.result instanceof ArrayBuffer
+          ? resolve(reader.result)
+          : reject(new Error("Could not read image bytes."));
+        reader.readAsArrayBuffer(file);
+      });
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export function ShoppingBillsPage() {
@@ -34,14 +51,39 @@ export function ShoppingBillsPage() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const [uploadStep, setUploadStep] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [billDraft, setBillDraft] = useState<{ file: File; data: ReceiptData } | null>(null);
+  const [preparingSelection, setPreparingSelection] = useState(false);
+  type QueueEntry = { id: number; file: File; status: "waiting" | "extracting" | "ready" | "failed" | "confirming" | "saved"; data?: ReceiptData; error?: string };
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [confirmingDraft, setConfirmingDraft] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const draftImageUrl = useMemo(() => billDraft ? URL.createObjectURL(billDraft.file) : null, [billDraft?.file]);
+  const hasUnsavedWork = queue.some(entry => entry.status !== "saved");
+  usePrompt({ when: hasUnsavedWork, message: "Leave this page and discard unfinished Bill Images and drafts? A Bill confirmation already submitted may still finish. Saved Bills will remain." });
+  const activeEntry = queue.find(entry => entry.id === activeId && entry.status !== "saved");
+  const draftImageUrl = useMemo(() => activeEntry ? URL.createObjectURL(activeEntry.file) : null, [activeEntry?.id]);
   useEffect(() => () => { if (draftImageUrl) URL.revokeObjectURL(draftImageUrl); }, [draftImageUrl]);
+  const queueRef = React.useRef<QueueEntry[]>([]);
+  const nextId = React.useRef(0);
+  const generation = React.useRef(0);
+  const extractionInFlight = React.useRef(false);
+  const selectionInFlight = React.useRef(false);
+  const seenImageHashes = React.useRef(new Set<string>());
+  const setEntries = useCallback((update: (entries: QueueEntry[]) => QueueEntry[]) => {
+    const next = update(queueRef.current);
+    queueRef.current = next;
+    setQueue(next);
+  }, []);
+  useEffect(() => () => { generation.current += 1; }, []);
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const protectUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectUnload);
+    return () => window.removeEventListener("beforeunload", protectUnload);
+  }, [hasUnsavedWork]);
   const financeService = useMemo(
     () => new FinanceService(async () => getToken({ template: "AspNetToken" })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,59 +137,95 @@ export function ShoppingBillsPage() {
     } catch { /* The save succeeded; retain its returned truth if a subsequent read fails. */ }
   }, [financeService]);
 
-  // ── Upload → inject new bill at top ────────────────────────────────
-  const handleUpload = useCallback(
-    async (file: File) => {
-      setUploadLoading(true);
-      setUploadStep("Reading image metadata...");
-      setUploadError(null);
-
-      const steps = [
-        "Detecting alignment & text flow (OCR)...",
-        "Classifying columns & monetary indices...",
-        "Running OCR & parsing models...",
-      ];
-      let stepIdx = 0;
-      const timer = setInterval(() => {
-        if (stepIdx < steps.length) setUploadStep(steps[stepIdx++]);
-      }, 1200);
-
-      try {
-        const { data } = await processReceiptWithDetails(file, async () =>
-          getToken({ template: "AspNetToken" }),
-        );
-        clearInterval(timer);
-        setBillDraft({ file, data });
-        setDraftError(null);
-        setUploadStep("");
-      } catch (e) {
-        clearInterval(timer);
-        setUploadStep("");
-        const message = e instanceof Error ? e.message : String(e);
-        setUploadError(message);
-      } finally {
-        setUploadLoading(false);
+  // Process a fixed selection sequentially; review and confirmation can overlap later extraction.
+  const processNext = useCallback(async () => {
+    if (extractionInFlight.current) return;
+    const candidate = queueRef.current.find(entry => entry.status === "waiting");
+    if (!candidate) return;
+    extractionInFlight.current = true;
+    const requestGeneration = generation.current;
+    setEntries(entries => entries.map(entry => entry.id === candidate.id ? { ...entry, status: "extracting", error: undefined } : entry));
+    try {
+      const { data } = await processReceiptWithDetails(candidate.file, async () => getToken({ template: "AspNetToken" }));
+      if (requestGeneration !== generation.current) return;
+      setEntries(entries => entries.map(entry => entry.id === candidate.id ? { ...entry, status: "ready", data, error: undefined } : entry));
+      setActiveId(current => current ?? candidate.id);
+    } catch (error) {
+      if (requestGeneration !== generation.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setEntries(entries => entries.map(entry => entry.id === candidate.id ? { ...entry, status: "failed", error: message } : entry));
+      setUploadError(message);
+    } finally {
+      if (requestGeneration === generation.current) {
+        extractionInFlight.current = false;
+        if (queueRef.current.some(entry => entry.status === "waiting")) void processNext();
       }
-    },
-    [getToken],
-  );
+    }
+  }, [getToken, setEntries]);
+
+  const handleUpload = useCallback(async (files: File[]) => {
+    if (queueRef.current.length || selectionInFlight.current) return;
+    selectionInFlight.current = true;
+    setPreparingSelection(true);
+    try {
+      const accepted: File[] = [];
+      const hashes = new Set<string>();
+      const duplicates: string[] = [];
+      for (const file of files) {
+        const hash = await imageContentHash(file);
+        if (seenImageHashes.current.has(hash) || hashes.has(hash)) duplicates.push(file.name);
+        else { hashes.add(hash); accepted.push(file); }
+      }
+      hashes.forEach(hash => seenImageHashes.current.add(hash));
+      if (duplicates.length) setUploadError(previous => [previous, `Duplicate images not added: ${duplicates.join(", ")}`].filter(Boolean).join(" "));
+      if (!accepted.length) return;
+      generation.current += 1;
+      const entries = accepted.map(file => ({ id: nextId.current++, file, status: "waiting" as const }));
+      queueRef.current = entries;
+      setQueue(entries);
+      void processNext();
+    } catch (error) {
+      setUploadError(error instanceof Error ? `Could not check image duplicates: ${error.message}` : "Could not check image duplicates.");
+    } finally {
+      selectionInFlight.current = false;
+      setPreparingSelection(false);
+    }
+  }, [processNext]);
+
+  const handleDraftChange = useCallback((id: number, data: ReceiptData | null) => {
+    if (!data) return;
+    setEntries(entries => entries.map(entry => entry.id === id ? { ...entry, data } : entry));
+  }, [setEntries]);
 
   const handleConfirmDraft = useCallback(async (corrected: ReceiptData) => {
-    if (!billDraft) return;
+    const entry = queueRef.current.find(item => item.id === activeId);
+    if (!entry?.data || confirmingDraft) return;
     setConfirmingDraft(true);
     setDraftError(null);
+    setEntries(entries => entries.map(item => item.id === entry.id ? { ...item, status: "confirming", data: corrected } : item));
     try {
-      const saved = await financeService.confirmReceipt(billDraft.file, corrected);
+      const saved = await financeService.confirmReceipt(entry.file, corrected);
       await refreshRows(saved);
-      setBillDraft(null);
+      setEntries(entries => entries.map(item => item.id === entry.id ? { ...item, status: "saved" } : item));
+      const next = queueRef.current.find(item => item.status === "ready" && item.id !== entry.id);
+      setActiveId(next?.id ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setDraftError(message);
+      setEntries(entries => entries.map(item => item.id === entry.id ? { ...item, status: "ready", error: message, data: corrected } : item));
       throw error;
     } finally {
       setConfirmingDraft(false);
     }
-  }, [billDraft, financeService, refreshRows]);
+  }, [activeId, confirmingDraft, financeService, refreshRows, setEntries]);
+
+  useEffect(() => {
+    if (queue.length && queue.every(entry => entry.status === "saved")) {
+      queueRef.current = [];
+      setQueue([]);
+      setActiveId(null);
+    }
+  }, [queue]);
 
   // One complete Bill save owns header, item additions/edits/deletions and Matching.
   const handleSave = useCallback(
@@ -219,32 +297,48 @@ export function ShoppingBillsPage() {
 
         {/* DROPZONE / SCANNER AREA */}
         <div className="mt-6 flex justify-center">
-          <UploadZone
-            onImageSelected={handleUpload}
-            isLoading={uploadLoading}
-            loadingStep={uploadStep}
+          {!queue.length && <UploadZone
+            onImagesSelected={handleUpload}
+            isLoading={preparingSelection}
+            loadingStep={preparingSelection ? "Checking selected images..." : ""}
             error={uploadError}
             onFileTypeError={(msg) => setUploadError(msg)}
             onClearImage={() => setUploadError(null)}
-          />
+          />}
         </div>
+        {uploadError && queue.length > 0 && <div role="alert" className="mt-3 p-3 bg-rose-50 border border-rose-100 rounded-sm text-xs text-rose-700">{uploadError}</div>}
 
-        {billDraft && (
+        {!!queue.length && <section aria-label="Bill Image queue" className="mt-5 bg-white border border-slate-300 rounded-sm">
+          <div className="flex justify-between border-b border-slate-200 px-5 py-3 text-xs font-bold uppercase tracking-wider"><span>Bill Image queue</span><span>{queue.filter(item => item.status === "saved").length} saved · {queue.filter(item => item.status === "ready").length} ready · {queue.filter(item => item.status === "extracting").length} extracting · {queue.filter(item => item.status === "waiting").length} waiting · {queue.filter(item => item.status === "failed").length} failed</span></div>
+          {queue.map(entry => <div key={entry.id} className={`flex items-center gap-3 px-5 py-2 border-b border-slate-100 ${entry.id === activeId ? "bg-slate-100" : ""}`}>
+            <button type="button" disabled={!entry.data || entry.status === "confirming" || entry.status === "saved"} onClick={() => {setActiveId(entry.id); setDraftError(entry.error ?? null);}} className="flex-1 text-left text-xs underline disabled:no-underline">{entry.file.name}</button>
+            <span className="text-[10px] uppercase text-slate-500">{entry.error ? `Failed: ${entry.error}` : entry.status}</span>
+            {entry.status === "failed" && <button type="button" disabled={extractionInFlight.current} onClick={() => {setEntries(items => items.map(item => item.id === entry.id ? {...item, status: "waiting", error: undefined} : item)); void processNext();}} className="border px-2 py-1 text-xs">Retry</button>}
+          </div>)}
+          <div className="flex justify-end p-3"><button type="button" disabled={confirmingDraft} onClick={() => {
+            const unsaved = queueRef.current.filter(item => item.status !== "saved").length;
+            if (!window.confirm(`End review and discard ${unsaved} unsaved image${unsaved === 1 ? "" : "s"} and Bill Draft${unsaved === 1 ? "" : "s"}? Saved Bills will remain.`)) return;
+            generation.current += 1; extractionInFlight.current = false; queueRef.current = []; setQueue([]); setActiveId(null); setDraftError(null); setUploadError(null);
+          }} className="border px-3 py-1 text-xs">End review</button></div>
+        </section>}
+
+        {activeEntry?.data && (
           <section aria-label="Bill Draft preview" className="mt-5 bg-white border border-slate-300 rounded-sm p-4 space-y-3">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider">
-              <span>Bill Draft · not saved</span>
-              <button type="button" onClick={() => { setBillDraft(null); setDraftError(null); }} className="border px-3 py-1">Cancel</button>
+              <span>Bill Draft · not saved · {activeEntry.file.name}</span>
             </div>
-            <img src={draftImageUrl ?? undefined} alt="Receipt preview" className="max-h-64 max-w-full object-contain mx-auto" />
+            {draftImageUrl && <BillImageViewer key={activeEntry.id} src={draftImageUrl} alt={`Original Bill Image: ${activeEntry.file.name}`} />}
             <BillReportPanel
-              receiptData={billDraft.data}
+              key={activeEntry.id}
+              receiptData={activeEntry.data}
+              onDraft={data => handleDraftChange(activeEntry.id, data)}
               categories={categories}
               draft
               saving={confirmingDraft}
               saveError={draftError ?? undefined}
               onSave={handleConfirmDraft}
               expandable={false}
-              currency={billDraft.data.currency}
+              currency={activeEntry.data.currency}
             />
           </section>
         )}
