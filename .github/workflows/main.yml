@@ -32,6 +32,7 @@ jobs:
         HTTPS: ${{ vars.HTTPS }}
         DB_VOLUME_PATH: ${{ vars.DB_VOLUME_PATH }}
         STORAGE_PATH: ${{ vars.STORAGE_PATH }}
+        LEARNING_CONTENT_PATH: ${{ vars.LEARNING_CONTENT_PATH }}
 
     # Step 3: Verify the services are running (Optional)
     - name: Verify Services
