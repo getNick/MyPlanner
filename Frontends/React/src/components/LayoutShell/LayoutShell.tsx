@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Landmark,
   Receipt,
+  GraduationCap,
   Menu,
   X,
 } from "lucide-react";
@@ -37,6 +38,8 @@ const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
+  // One entry for the whole library: Lessons are picked inside /learning, not in the panel (Q23).
+  { id: "learning", label: "Learning", path: "/learning", icon: GraduationCap },
 ];
 
 type SidebarVariant = "desktop" | "drawer";

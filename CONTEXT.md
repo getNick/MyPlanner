@@ -258,3 +258,53 @@ A Bank Transaction whose stored raw data lets the same parser extract it again: 
 plus the row's line number and Bank Profile, not the bare data line alone. Today's column holds
 the line only, which is why it dies.
 _Avoid_: Raw record, CSV string, source row.
+
+---
+
+# Learning vocabulary
+
+Design: `docs/learning-pages-integration-design.md`. These name what MyPlanner reads from a folder it
+does not own — Lesson Pages written elsewhere and synced in. Nothing here is stored in the ledger.
+
+## Content Mount
+
+The synced folder (a Nextcloud/Obsidian subfolder today) bind-mounted **read-only** into the api container
+and named by `LEARNING_CONTENT_PATH`. It is where published learning content lives on disk; MyPlanner never
+writes to it, and no code path may treat its paths as user input.
+_Avoid_: Bucket (that is uploads, written by MyPlanner), vault (the whole Obsidian library, of which the
+mount is one folder), "the lessons folder" in code (the mount's host path changes; the env var names it).
+
+## Course Manifest
+
+`courses.json` at the root of the Content Mount: the publish list of Courses and, under each, the Lesson
+Pages to show, in reading order, with their display titles. Listing is what publishes; array order is the
+sequence. Without a listed page a file is invisible no matter how correct it looks.
+_Avoid_: index file, catalog, sitemap (nothing crawls or discovers — Q17=C).
+
+## Lesson Page
+
+One self-contained HTML file: its own stylesheet and quiz script inside it, no shared assets, no Markdown
+at read time. Its display title comes from the Manifest, never from `<title>` or the filename.
+_Avoid_: article, note (an Obsidian note is source material, not a published Lesson Page), README.
+
+## Learning Guideline
+
+`LEARNING-GUIDELINE.md` at the root of the Content Mount — the written contract a generated Lesson Page must
+satisfy: Self-contained bundling, mobile-first, quiz markup names, and the palette, where the neutrals are
+fixed to MyPlanner's own (page background slate-50, cards white, text zinc-900) and only accents are the
+Course's. It is never Published, and it outranks the Exemplar page.
+_Avoid_: style guide, template (the Exemplar is the copied shape), guideline in `docs/` (an author works in
+the vault, not this repo).
+
+## Published
+
+A Course or Lesson Page named in the Course Manifest. **Synced** only means the bytes arrived in the
+Content Mount; a synced file that is not listed is not Published and must never appear in the library.
+_Avoid_: available, present, discovered (file presence proves nothing).
+
+## Content Unavailable
+
+The state where the mount is mounted but the Manifest cannot be read — missing, unparseable, or pointing at
+a folder or file that is not on disk. Reported loudly with the path that failed, and distinct from an empty
+library, which is a legitimate published-nothing state.
+_Avoid_: "no lessons", empty state (an empty shelf is not a broken shelf).

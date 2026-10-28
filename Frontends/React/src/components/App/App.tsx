@@ -16,6 +16,7 @@ import { TodoTimePage } from "../../pages/TodoTimePage/TodoTimePage";
 import { BankStatementsPage } from "../../pages/BankStatementsPage/BankStatementsPage";
 import { ShoppingBillsPage } from "../../pages/ShoppingBillsPage/ShoppingBillsPage";
 import PaymentMethodsPage from "../../pages/PaymentMethodsPage/PaymentMethodsPage";
+import LearningPage from "../../pages/LearningPage/LearningPage";
 
 const App: React.FC = () => {
   const router = createBrowserRouter([
@@ -77,6 +78,20 @@ const App: React.FC = () => {
         {
           path: "finance/shopping-bills",
           element: <ShoppingBillsPage />,
+        },
+        {
+          // The learning library. /learning and /learning/:courseSlug are not dead ends: they redirect
+          // down to the first published lesson (Q15), so a shared link can be as shallow as you like.
+          path: "learning",
+          element: <LearningPage />,
+        },
+        {
+          path: "learning/:courseSlug",
+          element: <LearningPage />,
+        },
+        {
+          path: "learning/:courseSlug/:lessonSlug",
+          element: <LearningPage />,
         },
       ],
     },

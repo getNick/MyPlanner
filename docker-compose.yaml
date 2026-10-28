@@ -32,8 +32,15 @@ services:
       # DB_VOLUME_PATH does for the database. The mount is not optional: without it the writes succeed
       # and vanish on the next `docker compose up`.
       STORAGE_PATH: /app/storage
+      # The Content Mount — a read-only view of the synced folder holding the published Courses that
+      # /learning reads (MyPlanner.Service/Models/LearningOptions.cs). As with STORAGE_PATH the variable
+      # picks the host folder and the in-container path is fixed. Read-only, because the app never writes
+      # lesson content: adding a Lesson Page is sync + one courses.json line + refresh, no rebuild and no
+      # restart (Q4). Without this mount the page reports which path it could not read (Q20).
+      LEARNING_CONTENT_PATH: /app/learning
     volumes:
       - ${STORAGE_PATH:-./storage}:/app/storage
+      - ${LEARNING_CONTENT_PATH:-./learning}:/app/learning:ro
 
   database:
     image: mysql

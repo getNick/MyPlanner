@@ -125,6 +125,14 @@ void ConfigureServices(IServiceCollection services)
         options.Path = builder.Configuration["STORAGE_PATH"] ?? MyPlanner.Service.Models.BucketOptions.DefaultPath);
     services.AddSingleton<IBucketStore, BucketStore>();
 
+    // The Content Mount: the synced folder whose published Courses are read for /learning. Like the
+    // Bucket, LEARNING_CONTENT_PATH names the host folder and docker-compose.yaml bind-mounts it — but
+    // read-only, because the app never writes here (Q4). Read from disk per request, so adding a Lesson
+    // Page needs no rebuild and no restart.
+    services.Configure<MyPlanner.Service.Models.LearningOptions>(options =>
+        options.ContentPath = builder.Configuration["LEARNING_CONTENT_PATH"] ?? MyPlanner.Service.Models.LearningOptions.DefaultPath);
+    services.AddSingleton<ILearningLibrary, LearningLibrary>();
+
     services.AddScoped<IFinanceService, FinanceService>();
 
 }

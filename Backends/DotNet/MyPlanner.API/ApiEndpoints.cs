@@ -5,6 +5,22 @@ public static class ApiEndpoints
     private const string ApiBase = "api";
 
 
+    public static class Learning
+    {
+        private const string LearningBase = $"{ApiBase}/learning";
+
+        /// <summary>The published Courses — the Course Manifest read from the Content Mount.</summary>
+        public const string Courses = $"{LearningBase}/courses";
+
+        /// <summary>The Lesson Pages of one published Course, in manifest order.</summary>
+        public const string Lessons = $"{Courses}/{{courseSlug}}/lessons";
+
+        /// <summary>One Lesson Page's HTML — the item under the lesson collection, served as
+        /// <c>text/html</c>. One word for one concept: this is the same object the list above names.
+        /// The only endpoint in the API without [Authorize] (Q9).</summary>
+        public const string LessonPage = $"{Lessons}/{{lessonSlug}}";
+    }
+
     public static class Todo
     {
         private const string TodoBase = $"{ApiBase}/todo";
